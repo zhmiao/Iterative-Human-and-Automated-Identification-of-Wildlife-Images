@@ -3,10 +3,14 @@ import numpy as np
 from PIL import Image
 from io import BytesIO
 from datetime import datetime
+from tqdm import tqdm
+import time
 import paramiko
 
 
 def upload(season):
+
+    print('\n\nUploading {}'.format(season))
 
     root = os.path.join('/Volumes/New Volume', season)
     info_txt = open('./{}.txt'.format(season), 'a')
@@ -25,20 +29,28 @@ def upload(season):
 
     cam_list = [d for d in os.listdir(root) if not d.startswith('.') and os.path.isdir(os.path.join(root, d))]
 
-    for cam in cam_list:
+    for cam_id, cam in enumerate(cam_list):
+
+        print('\nUploading {} ({}/{})'.format(cam, cam_id, len(cam_list)))
+
+        time.sleep(0.2)
 
         cam_root = os.path.join(root, cam)
 
         species_list = [d for d in os.listdir(cam_root) if
                         not d.startswith('.') and os.path.isdir(os.path.join(cam_root, d))]
 
-        for species in species_list:
+        for species_id, species in enumerate(species_list):
+
+            print('\nUploading {} ({}/{})'.format(species, species_id, len(species_list)))
+
+            time.sleep(0.2)
 
             species_root = os.path.join(cam_root, species)
 
             file_list = [d for d in os.listdir(species_root) if not d.startswith('.') and d.endswith('JPG')]
 
-            for local_file_name in file_list:
+            for local_file_name in tqdm(file_list):
 
                 img_path = os.path.join(species_root, local_file_name)
 
@@ -85,7 +97,6 @@ def upload(season):
 
     sftp.close()
     ssh.close()
-
     info_txt.close()
 
 
