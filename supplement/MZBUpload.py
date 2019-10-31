@@ -1,12 +1,14 @@
 import os
 import numpy as np
 from PIL import Image
+from PIL import ImageFile
 from io import BytesIO
 from datetime import datetime
 from tqdm import tqdm
 import time
 import paramiko
 
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def upload(season):
 
@@ -61,6 +63,7 @@ def upload(season):
                 except IOError:
                     print('Create {}'.format(srv_species_root))
                     ssh.exec_command('mkdir -p {}'.format(srv_species_root))
+                    time.sleep(0.3)
 
                 srv_file_name = cam + '_' + local_file_name.replace(' ', '_')
                 srv_img_path = os.path.join(srv_species_root, srv_file_name)
@@ -89,7 +92,10 @@ def upload(season):
 
                 fl.seek(0)
 
-                sftp.putfo(fl, srv_img_path, file_size, None, True)
+                try:
+                    sftp.putfo(fl, srv_img_path, file_size, None, True)
+                except:
+                    print('Uploading problem {}'.format(srv_img_path))
 
                 fl.close()
 
