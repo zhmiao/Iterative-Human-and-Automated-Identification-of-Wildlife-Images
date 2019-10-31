@@ -39,8 +39,11 @@ def upload(season):
 
         cam_root = os.path.join(root, cam)
 
-        species_list = [d for d in os.listdir(cam_root) if
-                        not d.startswith('.') and os.path.isdir(os.path.join(cam_root, d))]
+        species_list = [d for d in os.listdir(cam_root) 
+                        if not d.startswith('.')
+                        and os.path.isdir(os.path.join(cam_root, d))
+                        and d != 'Ghost'
+                        and d != 'Setup']
 
         for species_id, species in enumerate(species_list):
 
@@ -56,7 +59,7 @@ def upload(season):
 
                 img_path = os.path.join(species_root, local_file_name)
 
-                srv_species_root = os.path.join(srv_root, season, species)
+                srv_species_root = os.path.join(srv_root, season, species).replace(' ', '_')
 
                 try:
                     sftp.stat(srv_species_root)
@@ -68,7 +71,8 @@ def upload(season):
                 srv_file_name = cam + '_' + local_file_name.replace(' ', '_')
                 srv_img_path = os.path.join(srv_species_root, srv_file_name)
                 file_id = srv_img_path.replace(srv_root, '')
-                assert ' ' not in file_id
+
+                assert ' ' not in file_id, 'Space in file_id: {}'.format(file_id)
 
                 fl = BytesIO()
 
