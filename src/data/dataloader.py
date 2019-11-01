@@ -48,7 +48,7 @@ def get_dataset(name, rootdir, dset):
 
     print('Getting dataset: {} {} {} \n'.format(name, rootdir, dset))
 
-    return dataset_obj[name](rootdir, dset=dset, transform=data_transforms)
+    return dataset_obj[name](rootdir, dset=dset, transform=data_transforms[dset])
 
 
 def load_dataset(name, dset, batch=64, rootdir='', shuffle=True, num_workers=1):
