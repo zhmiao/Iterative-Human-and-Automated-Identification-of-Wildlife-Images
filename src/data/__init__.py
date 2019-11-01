@@ -1,2 +1,2 @@
-from . import CCT_15
-from . import Mozambique
+from . import CCT
+from . import MOZ
