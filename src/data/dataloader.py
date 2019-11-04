@@ -24,10 +24,8 @@ data_transforms = {
     ])
 }
 
-# Dataset dictionary
+
 dataset_obj = {}
-
-
 def register_dataset_obj(name):
 
     """
