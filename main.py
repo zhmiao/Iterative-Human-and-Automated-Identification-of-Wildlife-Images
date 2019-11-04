@@ -1,4 +1,6 @@
 from src.data.dataloader import get_dataset
+from src.models.model import get_model
+
 
 data_root = '/home/zhmiao/datasets/ecology'
 
