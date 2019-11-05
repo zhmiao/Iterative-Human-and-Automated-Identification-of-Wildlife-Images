@@ -25,3 +25,4 @@ def get_model(name, **args):
     if torch.cuda.is_available():
         net = net.cuda()
     return net
+

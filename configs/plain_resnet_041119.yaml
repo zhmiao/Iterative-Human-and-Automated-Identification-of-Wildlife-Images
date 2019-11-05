@@ -1,0 +1,25 @@
+# training
+algorithm: PlainResNet
+num_epochs: 1
+
+# data
+data_root: /home/zhmiao/datasets/ecology
+dataset_name: CCT_cis
+num_cls: 15
+batch_size: 128
+num_workers: 1
+
+# model
+model_name: PlainResNetClassifier
+num_layers: 18
+weights_init: ImageNet
+
+# optim
+## feature
+lr_feature: 0.01
+momentum_feature: 0.9
+weight_decay_feature: 0.0005
+## classifier
+lr_classifier: 0.01
+momentum_classifier: 0.9
+weight_decay_classifier: 0.0005

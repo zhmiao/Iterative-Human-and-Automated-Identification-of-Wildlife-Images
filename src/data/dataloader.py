@@ -49,7 +49,7 @@ def get_dataset(name, rootdir, dset):
     return dataset_obj[name](rootdir, dset=dset, transform=data_transforms[dset])
 
 
-def load_dataset(name, dset, batch=64, rootdir='', shuffle=True, num_workers=1):
+def load_dataset(name, dset, batch_size=64, rootdir='', shuffle=True, num_workers=1):
 
     """
     Dataset loader
@@ -63,7 +63,7 @@ def load_dataset(name, dset, batch=64, rootdir='', shuffle=True, num_workers=1):
     if len(dataset) == 0:
         return None
 
-    loader = DataLoader(dataset, batch_size=batch, shuffle=shuffle, num_workers=num_workers, pin_memory=True)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True)
 
     return loader
 

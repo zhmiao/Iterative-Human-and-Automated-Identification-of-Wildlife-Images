@@ -1,7 +1,7 @@
 # Official ResNet Implementation
 import torch
 import torch.nn as nn
-from torchvision.models.resnet import conv1x1, BasicBlock, Bottleneck
+from torchvision.models.resnet import conv1x1, BasicBlock, Bottleneck, model_urls
 
 
 class ResNetFeature(nn.Module):
