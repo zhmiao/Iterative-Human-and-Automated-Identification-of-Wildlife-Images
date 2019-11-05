@@ -26,6 +26,9 @@ class PlainResNetClassifier(nn.Module):
         else:
             raise Exception('Pretrained weights not supported.')
 
+        # Criteria setup
+        self.setup_critera()
+
     def setup_net(self):
 
         kwargs = {}
