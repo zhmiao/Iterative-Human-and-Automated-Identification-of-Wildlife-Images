@@ -1,12 +1,14 @@
 # training
+conf_id: 041119
 algorithm: PlainResNet
 num_epochs: 1
+log_interval: 1
 
 # data
-data_root: /home/zhmiao/datasets/ecology
+dataset_root: /home/zhmiao/datasets/ecology
 dataset_name: CCT_cis
 num_cls: 15
-batch_size: 128
+batch_size: 64
 num_workers: 1
 
 # model
