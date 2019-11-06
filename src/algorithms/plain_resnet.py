@@ -117,6 +117,7 @@ class PlainResNet:
                 self.logger.info(info_str)
 
     def train(self):
+
         for epoch in range(self.num_epochs):
 
             # Training
@@ -129,7 +130,7 @@ class PlainResNet:
             self.logger.info(eval_info)
             self.logger.info('Macro Acc: {}'.format(val_acc))
             if val_acc > self.best_acc:
-                self.save()
+                self.save_model()
 
     def evaluate(self, loader):
 
@@ -170,9 +171,6 @@ class PlainResNet:
         return eval_info, class_acc.mean()
 
     def save_model(self):
-        ##############
-        # Save Model #
-        ##############
         os.makedirs(self.out_file.rsplit('/', 1)[0], exist_ok=True)
-        self.logger.info('Saving to', self.out_file)
+        self.logger.info('Saving to {}'.format(self.out_file))
         self.net.save(self.out_file)
