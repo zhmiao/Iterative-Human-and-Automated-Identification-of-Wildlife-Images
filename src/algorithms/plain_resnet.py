@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 
 from .utils import register_algorithm, Algorithm
-from src.data.dataloader import load_dataset
+from src.data.utils import load_dataset
 from src.models.utils import get_model
 
 

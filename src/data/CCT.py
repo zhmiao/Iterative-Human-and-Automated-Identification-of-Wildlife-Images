@@ -5,7 +5,7 @@ from PIL import Image
 
 from torch.utils.data import Dataset
 
-from .dataloader import register_dataset_obj
+from .utils import register_dataset_obj
 
 class CCT(Dataset):
 
