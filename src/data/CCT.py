@@ -10,7 +10,7 @@ from .dataloader import register_dataset_obj
 class CCT(Dataset):
 
     def __init__(self, rootdir, dset='train', transform=None):
-        self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_all_images_sm')
+        self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_all_images_256')
         self.ann_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_annotation_files')
         self.dset = dset
         self.transform = transform
@@ -24,7 +24,7 @@ class CCT(Dataset):
 
         self.categories_names = ann_js['categories']
         assert len(self.categories_names) == 16, 'Class label problems. \n'
-        self.data = [entry for entry in ann_js['annotations'] if entry['id'] != 30]
+        self.data = [entry for entry in ann_js['annotations'] if entry['category_id'] != 30]
 
         label = 0
         for cat in self.categories_names:
