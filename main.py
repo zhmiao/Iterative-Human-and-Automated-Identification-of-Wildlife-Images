@@ -44,7 +44,7 @@ log_file = os.path.join(log_root, '{}_{}_{}.log'.format(args.algorithm, args.con
 logging.basicConfig(format='%(levelname)s: %(message)s')
 logger = logging.getLogger('MAIN')
 logger.setLevel(logging.INFO)
-handler = logging.FileHandler(log_file, mode='w')
+handler = logging.FileHandler(log_file, mode='a' if args.evaluate else 'w')
 logger.addHandler(handler)
 setattr(args, 'logger', logger)
 
