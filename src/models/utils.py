@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 
 models = {}
 
@@ -25,4 +26,31 @@ def get_model(name, **args):
     if torch.cuda.is_available():
         net = net.cuda()
     return net
+
+
+class BaseModule(nn.Module):
+
+    """
+    Base module for reference.
+    """
+
+    name = None
+
+    def __init__(self):
+        super(BaseModule, self).__init__()
+
+    def setup_net(self):
+        pass
+
+    def setup_critera(self):
+        pass
+
+    def load(self, init_path):
+        pass
+
+    def load_features(self, init_path):
+        pass
+
+    def save(self, out_path):
+        pass
 

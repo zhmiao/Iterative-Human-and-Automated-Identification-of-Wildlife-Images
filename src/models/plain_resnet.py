@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
 
-from .utils import register_model
+from .utils import register_model, BaseModule
 from .resnet_backbone import ResNetFeature, BasicBlock, Bottleneck, model_urls
 
 
 @register_model('PlainResNetClassifier')
-class PlainResNetClassifier(nn.Module):
+class PlainResNetClassifier(BaseModule):
 
     name = 'PlainResNetClassifier'
 
