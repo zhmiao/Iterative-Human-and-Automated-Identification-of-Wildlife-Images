@@ -1,6 +1,5 @@
 # training
 conf_id: 041119
-session: 0
 algorithm: PlainResNet
 num_epochs: 1
 log_interval: 1
