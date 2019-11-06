@@ -21,3 +21,31 @@ def get_algorithm(name, args):
 
     alg = algorithms[name](args)
     return alg
+
+
+class Algorithm:
+
+    """
+    Base Algorithm class for reference.
+    """
+
+    name = None
+
+    def __init__(self, args):
+        self.args = args
+        self.logger = self.args.logger
+        self.weights_path = './weights/{}/{}_{}.pth'.format(self.args.algorithm, self.args.conf_id, self.args.session)
+
+    def train_epoch(self, epoch):
+        pass
+
+
+    def train(self):
+        pass
+
+    def evaluate(self, loader):
+        pass
+
+    def save_model(self):
+        pass
+

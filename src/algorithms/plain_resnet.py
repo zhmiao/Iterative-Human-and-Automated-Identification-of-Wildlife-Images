@@ -1,17 +1,18 @@
 import os
 import numpy as np
+from datetime import datetime
 from tqdm import tqdm
 
 import torch
 import torch.optim as optim
 
-from .utils import register_algorithm
+from .utils import register_algorithm, Algorithm
 from src.data.dataloader import load_dataset
 from src.models.utils import get_model
 
 
 @register_algorithm('PlainResNet')
-class PlainResNet:
+class PlainResNet(Algorithm):
 
     """
     Overall training function.
@@ -20,31 +21,26 @@ class PlainResNet:
     name = 'PlainResNet'
 
     def __init__(self, args):
-
-        self.num_epochs = args.num_epochs
-        self.log_interval = args.log_interval
-        self.logger = args.logger
-        self.best_acc = 0.
-        self.out_file = './weights/{}/{}_{}.pth'.format(args.algorithm, args.conf_id, args.session)
+        super(PlainResNet, self).__init__(args=args)
 
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader = load_dataset(name=args.dataset_name, dset='train', rootdir=args.dataset_root,
-                                        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+        self.trainloader = load_dataset(name=self.args.dataset_name, dset='train', rootdir=self.args.dataset_root,
+                                        batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers)
 
-        self.testloader = load_dataset(name=args.dataset_name, dset='test', rootdir=args.dataset_root,
-                                       batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+        self.testloader = load_dataset(name=self.args.dataset_name, dset='test', rootdir=self.args.dataset_root,
+                                       batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
-        self.valloader = load_dataset(name=args.dataset_name, dset='test', rootdir=args.dataset_root,
-                                      batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+        self.valloader = load_dataset(name=self.args.dataset_name, dset='test', rootdir=self.args.dataset_root,
+                                      batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
         ###########################
         # Setup cuda and networks #
         ###########################
         # setup network
-        self.net = get_model(name=args.model_name, num_cls=args.num_cls,
-                             weights_init=args.weights_init, num_layers=args.num_layers)
+        self.net = get_model(name=self.args.model_name, num_cls=self.args.num_cls,
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers)
         # print network and arguments
         print(self.net)
 
@@ -54,17 +50,17 @@ class PlainResNet:
         # Setup optimizer parameters for each network component
         net_optim_params_list = [
             {'params': self.net.feature.parameters(),
-             'lr': args.lr_feature,
-             'momentum': args.momentum_feature,
-             'weight_decay': args.weight_decay_feature},
+             'lr': self.args.lr_feature,
+             'momentum': self.args.momentum_feature,
+             'weight_decay': self.args.weight_decay_feature},
             {'params': self.net.classifier.parameters(),
-             'lr': args.lr_classifier,
-             'momentum': args.momentum_classifier,
-             'weight_decay': args.weight_decay_classifier}
+             'lr': self.args.lr_classifier,
+             'momentum': self.args.momentum_classifier,
+             'weight_decay': self.args.weight_decay_classifier}
         ]
         # Setup optimizer and optimizer scheduler
         self.opt_net = optim.SGD(net_optim_params_list)
-        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=args.step_size, gamma=args.gamma)
+        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
 
     def train_epoch(self, epoch):
 
@@ -108,7 +104,7 @@ class PlainResNet:
             ###########
             # Logging #
             ###########
-            if batch_idx % self.log_interval == 0:
+            if batch_idx % self.args.log_interval == 0:
                 # compute overall acc
                 preds = logits.argmax(dim=1)
                 acc = (preds == labels).float().mean()
@@ -118,7 +114,9 @@ class PlainResNet:
 
     def train(self):
 
-        for epoch in range(self.num_epochs):
+        best_acc = 0.
+
+        for epoch in range(self.args.num_epochs):
 
             # Training
             self.train_epoch(epoch)
@@ -129,7 +127,7 @@ class PlainResNet:
             eval_info, val_acc = self.evaluate(self.valloader)
             self.logger.info(eval_info)
             self.logger.info('Macro Acc: {}'.format(val_acc))
-            if val_acc > self.best_acc:
+            if val_acc > best_acc:
                 self.save_model()
 
     def evaluate(self, loader):
@@ -137,7 +135,6 @@ class PlainResNet:
         self.net.eval()
 
         classes, class_num = loader.dataset.class_num_cal()
-
         class_correct = np.array([0. for _ in range(len(classes))])
 
         with torch.set_grad_enabled(False):
@@ -161,16 +158,15 @@ class PlainResNet:
                     if pred == label:
                         class_correct[label] += 1
 
+        # Record accuracies
         class_acc = class_correct / class_num
-
-        eval_info = 'Per-class evaluation results: '
-
+        eval_info = '[{}] Per-class evaluation results: '.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
         for i in range(len(class_acc)):
             eval_info += '{} [{}/{}]'.format(class_acc[i], class_correct[i], class_num[i])
 
         return eval_info, class_acc.mean()
 
     def save_model(self):
-        os.makedirs(self.out_file.rsplit('/', 1)[0], exist_ok=True)
-        self.logger.info('Saving to {}'.format(self.out_file))
-        self.net.save(self.out_file)
+        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
+        self.logger.info('Saving to {}'.format(self.weights_path))
+        self.net.save(self.weights_path)
