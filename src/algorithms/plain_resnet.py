@@ -1,6 +1,8 @@
 import os
-import yaml
+import numpy as np
+from tqdm import tqdm
 
+import torch
 import torch.optim as optim
 
 from .utils import register_algorithm
@@ -17,12 +19,13 @@ class PlainResNet:
 
     name = 'PlainResNet'
 
-
     def __init__(self, args):
 
         self.num_epochs = args.num_epochs
         self.log_interval = args.log_interval
         self.logger = args.logger
+        self.best_acc = 0.
+        self.out_file = './weights/{}/{}_{}.pth'.format(args.algorithm, args.conf_id, args.session)
 
         #######################################
         # Setup data for training and testing #
@@ -32,6 +35,9 @@ class PlainResNet:
 
         self.testloader = load_dataset(name=args.dataset_name, dset='test', rootdir=args.dataset_root,
                                        batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+
+        self.valloader = load_dataset(name=args.dataset_name, dset='test', rootdir=args.dataset_root,
+                                      batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
         ###########################
         # Setup cuda and networks #
@@ -45,6 +51,7 @@ class PlainResNet:
         ######################
         # Optimization setup #
         ######################
+        # Setup optimizer parameters for each network component
         net_optim_params_list = [
             {'params': self.net.feature.parameters(),
              'lr': args.lr_feature,
@@ -55,8 +62,9 @@ class PlainResNet:
              'momentum': args.momentum_classifier,
              'weight_decay': args.weight_decay_classifier}
         ]
+        # Setup optimizer and optimizer scheduler
         self.opt_net = optim.SGD(net_optim_params_list)
-        # TODO: scheduler
+        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=args.step_size, gamma=args.gamma)
 
     def train_epoch(self, epoch):
 
@@ -101,27 +109,70 @@ class PlainResNet:
             # Logging #
             ###########
             if batch_idx % self.log_interval == 0:
-                # compute discriminator acc
+                # compute overall acc
                 preds = logits.argmax(dim=1)
                 acc = (preds == labels).float().mean()
-                # log discriminator update info
+                # log update info
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
                 self.logger.info(info_str)
 
-    def test_epoch(self):
-        pass
-
     def train(self):
         for epoch in range(self.num_epochs):
+
+            # Training
             self.train_epoch(epoch)
+            self.scheduler.step()
+
+            # Validation
+            self.logger.info('Validation.')
+            eval_info, val_acc = self.evaluate(self.valloader)
+            self.logger.info(eval_info)
+            self.logger.info('Macro Acc: {}'.format(val_acc))
+            if val_acc > self.best_acc:
+                self.save()
+
+    def evaluate(self, loader):
+
+        self.net.eval()
+
+        classes, class_num = loader.dataset.class_num_cal()
+
+        class_correct = np.array([0. for _ in range(len(classes))])
+
+        with torch.set_grad_enabled(False):
+
+            for data, labels in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data, labels = data.cuda(), labels.cuda()
+                data.require_grad = False
+                labels.require_grad = False
+
+                # forward
+                feats = self.net.feature(data)
+                logits = self.net.classifier(feats)
+
+                # compute correct
+                preds = logits.argmax(dim=1)
+                for i in range(len(preds)):
+                    pred = preds[i]
+                    label = labels[i]
+                    if pred == label:
+                        class_correct[label] += 1
+
+        class_acc = class_correct / class_num
+
+        eval_info = 'Per-class evaluation results: '
+
+        for i in range(len(class_acc)):
+            eval_info += '{} [{}/{}]'.format(class_acc[i], class_correct[i], class_num[i])
+
+        return eval_info, class_acc.mean()
 
     def save_model(self):
-        pass
         ##############
         # Save Model #
         ##############
-        # os.makedirs(outdir, exist_ok=True)
-        # outfile = join(outdir, 'adda_{:s}_net_{:s}_{:s}.pth'.format(
-        #     model, src, tgt))
-        # print('Saving to', outfile)
-        # net.save(outfile)
+        os.makedirs(self.out_file.rsplit('/', 1)[0], exist_ok=True)
+        self.logger.info('Saving to', self.out_file)
+        self.net.save(self.out_file)

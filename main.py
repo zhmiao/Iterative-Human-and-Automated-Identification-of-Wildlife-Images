@@ -33,8 +33,7 @@ for k, v in config.items():
 # Create logger #
 #################
 log_root = './log'
-if not os.path.exists(log_root):
-    os.mkdir(log_root)
+os.makedirs(log_root, exist_ok=True)
 log_file = os.path.join(log_root, '{}_{}.log'.format(args.algorithm, args.conf_id))
 logging.basicConfig(format='%(levelname)s: %(message)s')
 logger = logging.getLogger('MAIN')
@@ -44,7 +43,7 @@ logger.addHandler(handler)
 setattr(args, 'logger', logger)
 
 ##############
-# algorithms #
+# Algorithms #
 ##############
 alg = get_algorithm(args.algorithm, args)
 if not args.evaluate:
