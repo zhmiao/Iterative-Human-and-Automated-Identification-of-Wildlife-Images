@@ -35,7 +35,7 @@ class PlainResNet(Algorithm):
         self.valloader = load_dataset(name=self.args.dataset_name, dset='val', rootdir=self.args.dataset_root,
                                       batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
-        _, self.train_counts = self.trainloader.dataset.class_counts_cal()
+        _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
         ###########################
         # Setup cuda and networks #
@@ -128,7 +128,7 @@ class PlainResNet(Algorithm):
             self.logger.info('Validation.')
             eval_info, val_acc = self.evaluate(self.valloader)
             self.logger.info(eval_info)
-            self.logger.info('Macro Acc: {}'.format(val_acc))
+            self.logger.info('Macro Acc: {} \n'.format(val_acc))
             if val_acc > best_acc:
                 self.net.update_best()
 
@@ -138,10 +138,11 @@ class PlainResNet(Algorithm):
 
         self.net.eval()
 
+        # Get unique classes in the loader and corresponding counts
+        loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
+        class_correct = np.array([0. for _ in range(len(eval_class_counts))])
 
-        classes, class_counts = loader.dataset.class_counts_cal()
-        class_correct = np.array([0. for _ in range(len(classes))])
-
+        # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
 
             for data, labels in tqdm(loader, total=len(loader)):
@@ -163,11 +164,17 @@ class PlainResNet(Algorithm):
                     if pred == label:
                         class_correct[label] += 1
 
-        # Record accuracies
-        class_acc = class_correct / class_counts
+        # Record per class accuracies
+        class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
         for i in range(len(class_acc)):
-            eval_info += '{} ({}): {} \n'.format(classes[i], self.train_counts[i], class_acc[i])
+            eval_info += 'Class {} (train counts {}): {} \n'.format(i, self.train_class_counts[loader_uni_class][i], class_acc[i])
+
+        # Record missing classes if exist
+        missing_classes = list(set(loader.dataset.categories_labels.values()) - set(loader_uni_class))
+        eval_info += 'Missing classes: '
+        for c in missing_classes:
+            eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
         return eval_info, class_acc.mean()
 
