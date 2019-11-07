@@ -32,7 +32,7 @@ class PlainResNet(Algorithm):
         self.testloader = load_dataset(name=self.args.dataset_name, dset='test', rootdir=self.args.dataset_root,
                                        batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
-        self.valloader = load_dataset(name=self.args.dataset_name, dset='test', rootdir=self.args.dataset_root,
+        self.valloader = load_dataset(name=self.args.dataset_name, dset='val', rootdir=self.args.dataset_root,
                                       batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
         _, self.train_num = self.trainloader.dataset.class_num_cal()
