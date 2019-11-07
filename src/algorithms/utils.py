@@ -39,7 +39,6 @@ class Algorithm:
     def train_epoch(self, epoch):
         pass
 
-
     def train(self):
         pass
 
