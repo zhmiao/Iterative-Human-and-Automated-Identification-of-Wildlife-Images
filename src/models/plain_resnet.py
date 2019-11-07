@@ -66,8 +66,10 @@ class PlainResNetClassifier(BaseModule):
         self_keys = set(self.state_dict().keys())
         missing_keys = self_keys - load_keys
         unused_keys = load_keys - self_keys
-        print("missing keys: {}".format(sorted(list(missing_keys))))
-        print("unused_keys: {}".format(sorted(list(unused_keys))))
+
+        print('Loading weights: ')
+        print('missing keys: {}'.format(sorted(list(missing_keys))))
+        print('unused_keys: {}'.format(sorted(list(unused_keys))))
 
     def load_features(self, init_path):
 
