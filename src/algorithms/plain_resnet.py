@@ -35,6 +35,8 @@ class PlainResNet(Algorithm):
         self.valloader = load_dataset(name=self.args.dataset_name, dset='test', rootdir=self.args.dataset_root,
                                       batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
+        _, self.train_num = self.trainloader.dataset.class_num_cal()
+
         ###########################
         # Setup cuda and networks #
         ###########################
@@ -160,9 +162,9 @@ class PlainResNet(Algorithm):
 
         # Record accuracies
         class_acc = class_correct / class_num
-        eval_info = '[{}] Per-class evaluation results: '.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+        eval_info = '{} Per-class evaluation results: '.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
         for i in range(len(class_acc)):
-            eval_info += '{} [{}/{}]'.format(class_acc[i], class_correct[i], class_num[i])
+            eval_info += '{} ({}): {}'.format(classes[i], self.train_num[i], class_acc[i])
 
         return eval_info, class_acc.mean()
 
