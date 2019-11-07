@@ -34,9 +34,15 @@ class CCT(Dataset):
 
     def class_num_cal(self):
         labels = []
+        label_counts = [0 for _ in range(len(self.categories_labels))]
         for entry in self.data:
             labels.append(self.categories_labels[entry['category_id']])
-        return np.unique(labels, return_counts=True)
+
+        unique_labels, unique_counts = np.unique(labels, return_counts=True)
+        for i in range(len(unique_labels)):
+            label_counts[unique_labels[i]] = unique_counts[i]
+        return unique_labels, label_counts
+
 
     def __len__(self):
         return len(self.data)
