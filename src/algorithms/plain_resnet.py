@@ -165,9 +165,9 @@ class PlainResNet(Algorithm):
 
         # Record accuracies
         class_acc = class_correct / class_counts
-        eval_info = '{} Per-class evaluation results: '.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+        eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
         for i in range(len(class_acc)):
-            eval_info += '{} ({}): {}'.format(classes[i], self.train_counts[i], class_acc[i])
+            eval_info += '{} ({}): {} \n'.format(classes[i], self.train_counts[i], class_acc[i])
 
         return eval_info, class_acc.mean()
 
