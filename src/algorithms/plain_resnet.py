@@ -126,10 +126,10 @@ class PlainResNet(Algorithm):
 
             # Validation
             self.logger.info('\nValidation.')
-            eval_info, val_acc = self.evaluate(self.valloader)
+            eval_info, val_acc_mac, val_acc_mic = self.evaluate(self.valloader)
             self.logger.info(eval_info)
-            self.logger.info('Macro Acc: {} \n'.format(val_acc))
-            if val_acc > best_acc:
+            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(val_acc_mac, val_acc_mic))
+            if val_acc_mac > best_acc:
                 self.net.update_best()
 
         self.save_model()
@@ -166,9 +166,11 @@ class PlainResNet(Algorithm):
 
         # Record per class accuracies
         class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
+        overall_acc = class_correct.sum() / eval_class_counts.sum()
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
         for i in range(len(class_acc)):
-            eval_info += 'Class {} (train counts {}): {} \n'.format(i, self.train_class_counts[loader_uni_class][i], class_acc[i])
+            eval_info += 'Class {} (train counts {}): {:.3f} \n'.format(i, self.train_class_counts[loader_uni_class][i],
+                                                                        class_acc[i] * 100)
 
         # Record missing classes if exist
         missing_classes = list(set(loader.dataset.categories_labels.values()) - set(loader_uni_class))
@@ -176,7 +178,7 @@ class PlainResNet(Algorithm):
         for c in missing_classes:
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
-        return eval_info, class_acc.mean()
+        return eval_info, class_acc.mean(), overall_acc
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
