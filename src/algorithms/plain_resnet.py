@@ -35,7 +35,7 @@ class PlainResNet(Algorithm):
         self.valloader = load_dataset(name=self.args.dataset_name, dset='val', rootdir=self.args.dataset_root,
                                       batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
 
-        _, self.train_num = self.trainloader.dataset.class_num_cal()
+        _, self.train_counts = self.trainloader.dataset.class_counts_cal()
 
         ###########################
         # Setup cuda and networks #
@@ -138,7 +138,8 @@ class PlainResNet(Algorithm):
 
         self.net.eval()
 
-        classes, class_num = loader.dataset.class_num_cal()
+
+        classes, class_counts = loader.dataset.class_counts_cal()
         class_correct = np.array([0. for _ in range(len(classes))])
 
         with torch.set_grad_enabled(False):
@@ -163,10 +164,10 @@ class PlainResNet(Algorithm):
                         class_correct[label] += 1
 
         # Record accuracies
-        class_acc = class_correct / class_num
+        class_acc = class_correct / class_counts
         eval_info = '{} Per-class evaluation results: '.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
         for i in range(len(class_acc)):
-            eval_info += '{} ({}): {}'.format(classes[i], self.train_num[i], class_acc[i])
+            eval_info += '{} ({}): {}'.format(classes[i], self.train_counts[i], class_acc[i])
 
         return eval_info, class_acc.mean()
 

@@ -16,7 +16,7 @@ class MOZ(Dataset):
         self.categories_names = {}
         self.categories_labels = {}
 
-    def class_num_cal(self):
+    def class_counts_cal(self):
         labels = []
         pass
 
