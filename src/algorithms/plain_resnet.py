@@ -125,7 +125,7 @@ class PlainResNet(Algorithm):
             self.scheduler.step()
 
             # Validation
-            self.logger.info('Validation.')
+            self.logger.info('\nValidation.')
             eval_info, val_acc = self.evaluate(self.valloader)
             self.logger.info(eval_info)
             self.logger.info('Macro Acc: {} \n'.format(val_acc))
