@@ -130,7 +130,9 @@ class PlainResNet(Algorithm):
             self.logger.info(eval_info)
             self.logger.info('Macro Acc: {}'.format(val_acc))
             if val_acc > best_acc:
-                self.save_model()
+                self.net.update_best()
+
+        self.save_model()
 
     def evaluate(self, loader):
 

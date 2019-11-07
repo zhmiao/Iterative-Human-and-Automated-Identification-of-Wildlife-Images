@@ -1,3 +1,4 @@
+import copy
 import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
@@ -18,6 +19,7 @@ class PlainResNetClassifier(BaseModule):
         self.feature = None
         self.classifier = None
         self.criterion_cls = None
+        self.best_weights = None
 
         # Model setup and weights initialization
         self.setup_net()
@@ -84,5 +86,9 @@ class PlainResNetClassifier(BaseModule):
         print("unused_keys: {}".format(sorted(list(unused_keys))))
 
     def save(self, out_path):
-        torch.save(self.state_dict(), out_path)
+        torch.save(self.best_weights, out_path)
+
+    def update_best(self):
+        self.best_weights = copy.deepcopy(self.state_dict())
+
 

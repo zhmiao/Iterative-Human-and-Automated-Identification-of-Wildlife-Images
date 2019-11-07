@@ -54,3 +54,5 @@ class BaseModule(nn.Module):
     def save(self, out_path):
         pass
 
+    def update_best(self):
+        pass
