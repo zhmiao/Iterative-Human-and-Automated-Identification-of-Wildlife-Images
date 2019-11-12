@@ -15,28 +15,28 @@ class CCT(Dataset):
         self.dset = dset
         self.transform = transform
         self.data = None
-        self.categories_names = {}
-        self.categories_labels = {}
+        self.class_names = {}
+        self.class_labels = {}
 
     def load_json(self, json_dir):
         with open(json_dir, 'r') as js:
             ann_js = json.load(js)
 
-        self.categories_names = ann_js['categories']
-        assert len(self.categories_names) == 16, 'Class label problems. \n'
+        self.class_names = ann_js['categories']
+        assert len(self.class_names) == 16, 'Class label problems. \n'
         self.data = [entry for entry in ann_js['annotations'] if entry['category_id'] != 30]
 
         label = 0
-        for cat in self.categories_names:
-            if cat['id'] != 30:
-                self.categories_labels[cat['id']] = label
+        for cat in self.class_names:
+            if cat['id'] != 30 and cat['id'] != 33:
+                self.class_labels[cat['id']] = label
                 label += 1
 
     def class_counts_cal(self):
         labels = []
-        label_counts = np.array([0 for _ in range(len(self.categories_labels))])
+        label_counts = np.array([0 for _ in range(len(self.class_labels))])
         for entry in self.data:
-            labels.append(self.categories_labels[entry['category_id']])
+            labels.append(self.class_labels[entry['category_id']])
 
         unique_labels, unique_counts = np.unique(labels, return_counts=True)
         for i in range(len(unique_labels)):
@@ -48,7 +48,7 @@ class CCT(Dataset):
 
     def __getitem__(self, index):
         file_id = self.data[index]['image_id']
-        label = self.categories_labels[self.data[index]['category_id']]
+        label = self.class_labels[self.data[index]['category_id']]
         file_dir = os.path.join(self.img_root, file_id + '.jpg')
 
         with open(file_dir, 'rb') as f:
