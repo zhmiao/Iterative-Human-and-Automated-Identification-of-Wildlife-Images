@@ -24,7 +24,10 @@ class CCT(Dataset):
 
         self.class_names = ann_js['categories']
         assert len(self.class_names) == 16, 'Class label problems. \n'
-        self.data = [entry for entry in ann_js['annotations'] if entry['category_id'] != 30]
+        self.data = [entry
+                     for entry in ann_js['annotations']
+                     if entry['category_id'] != 30
+                     and entry['category_id'] != 33]
 
         label = 0
         for cat in self.class_names:
