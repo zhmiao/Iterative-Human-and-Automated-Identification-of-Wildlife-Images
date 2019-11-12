@@ -30,6 +30,7 @@ class CCT(Dataset):
 
         for entry in annotations:
             self.data.append(entry['image_id'])
+            assert entry['category_id'] in self.class_indices.keys()
             self.labels.append(self.class_indices[entry['category_id']])
 
     def class_counts_cal(self):
