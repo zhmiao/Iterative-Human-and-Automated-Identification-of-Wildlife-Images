@@ -67,25 +67,3 @@ def load_dataset(name, dset, batch_size=64, rootdir='', shuffle=True, num_worker
     return loader
 
 
-indices_obj = {}
-def register_class_indices(name):
-
-    """
-    Class indices register
-    """
-
-    def decorator(cls):
-        indices_obj[name] = cls
-        return cls
-    return decorator
-
-
-def get_class_indices(name):
-
-    """
-    Class indices getter
-    """
-
-    print('Getting class indices: {} \n'.format(name))
-
-    return indices_obj[name]
