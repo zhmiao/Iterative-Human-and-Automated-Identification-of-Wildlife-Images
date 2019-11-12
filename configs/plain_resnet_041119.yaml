@@ -7,6 +7,7 @@ log_interval: 1
 # data
 dataset_root: /home/zhmiao/datasets/ecology
 dataset_name: CCT_cis
+class_indices: CCT
 num_cls: 15
 batch_size: 128
 num_workers: 4
