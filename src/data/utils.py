@@ -40,18 +40,19 @@ def register_dataset_obj(name):
     return decorator
 
 
-def get_dataset(name, rootdir, dset):
+def get_dataset(name, rootdir, class_indices, dset):
 
     """
     Dataset getter
     """
 
     print('Getting dataset: {} {} {} \n'.format(name, rootdir, dset))
+    print('Using class indices: {} \n'.format(class_indices))
 
-    return dataset_obj[name](rootdir, dset=dset, transform=data_transforms[dset])
+    return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, transform=data_transforms[dset])
 
 
-def load_dataset(name, dset, batch_size=64, rootdir='', shuffle=True, num_workers=1):
+def load_dataset(name, class_indices, dset, batch_size=64, rootdir='', shuffle=True, num_workers=1):
 
     """
     Dataset loader
@@ -60,7 +61,7 @@ def load_dataset(name, dset, batch_size=64, rootdir='', shuffle=True, num_worker
     if dset != 'train':
         shuffle = False
 
-    dataset = get_dataset(name, rootdir, dset)
+    dataset = get_dataset(name, rootdir, class_indices, dset)
 
     if len(dataset) == 0:
         return None
