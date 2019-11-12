@@ -26,14 +26,20 @@ class PlainResNet(Algorithm):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader = load_dataset(name=self.args.dataset_name, dset='train', rootdir=self.args.dataset_root,
-                                        batch_size=self.args.batch_size, shuffle=True, num_workers=self.args.num_workers)
+        self.trainloader = load_dataset(name=self.args.dataset_name, class_indices=self.args.class_indices,
+                                        dset='train', rootdir=self.args.dataset_root,
+                                        batch_size=self.args.batch_size, shuffle=True,
+                                        num_workers=self.args.num_workers)
 
-        self.testloader = load_dataset(name=self.args.dataset_name, dset='test', rootdir=self.args.dataset_root,
-                                       batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
+        self.testloader = load_dataset(name=self.args.dataset_name, class_indices=self.args.class_indices,
+                                       dset='test', rootdir=self.args.dataset_root,
+                                       batch_size=self.args.batch_size, shuffle=False,
+                                       num_workers=self.args.num_workers)
 
-        self.valloader = load_dataset(name=self.args.dataset_name, dset='val', rootdir=self.args.dataset_root,
-                                      batch_size=self.args.batch_size, shuffle=False, num_workers=self.args.num_workers)
+        self.valloader = load_dataset(name=self.args.dataset_name, class_indices=self.args.class_indices,
+                                      dset='val', rootdir=self.args.dataset_root,
+                                      batch_size=self.args.batch_size, shuffle=False,
+                                      num_workers=self.args.num_workers)
 
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
