@@ -7,51 +7,47 @@ from torch.utils.data import Dataset
 
 from .utils import register_dataset_obj
 
+
 class CCT(Dataset):
 
-    def __init__(self, rootdir, dset='train', transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
         self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_all_images_256')
         self.ann_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_annotation_files')
+        self.class_indices = class_indices
         self.dset = dset
         self.transform = transform
-        self.data = None
-        self.class_names = {}
-        self.class_labels = {}
+        self.data = []
+        self.labels = []
 
     def load_json(self, json_dir):
         with open(json_dir, 'r') as js:
             ann_js = json.load(js)
 
-        self.class_names = ann_js['categories']
-        assert len(self.class_names) == 16, 'Class label problems. \n'
-        self.data = [entry
-                     for entry in ann_js['annotations']
-                     if entry['category_id'] != 30
-                     and entry['category_id'] != 33]
+        annotations = [entry
+                       for entry in ann_js['annotations']
+                       if entry['category_id'] != 30
+                       and entry['category_id'] != 33]
 
-        label = 0
-        for cat in self.class_names:
-            if cat['id'] != 30 and cat['id'] != 33:
-                self.class_labels[cat['id']] = label
-                label += 1
+        for entry in annotations:
+            self.data.append(entry['image_id'])
+            self.labels.append(self.class_indices[entry['category_id']])
 
     def class_counts_cal(self):
-        labels = []
-        label_counts = np.array([0 for _ in range(len(self.class_labels))])
-        for entry in self.data:
-            labels.append(self.class_labels[entry['category_id']])
+        label_counts = np.array([0 for _ in range(len(self.class_indices))])
 
-        unique_labels, unique_counts = np.unique(labels, return_counts=True)
+        unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
+
         for i in range(len(unique_labels)):
             label_counts[unique_labels[i]] = unique_counts[i]
+
         return unique_labels, label_counts
 
     def __len__(self):
-        return len(self.data)
+        return len(self.labels)
 
     def __getitem__(self, index):
-        file_id = self.data[index]['image_id']
-        label = self.class_labels[self.data[index]['category_id']]
+        file_id = self.data[index]
+        label = self.labels[index]
         file_dir = os.path.join(self.img_root, file_id + '.jpg')
 
         with open(file_dir, 'rb') as f:
