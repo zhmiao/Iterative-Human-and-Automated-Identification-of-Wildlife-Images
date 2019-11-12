@@ -31,8 +31,8 @@ class CCT_cis(CCT):
 
     name = 'CCT_cis'
 
-    def __init__(self, rootdir, dset='train', transform=None):
-        super(CCT_cis, self).__init__(rootdir=rootdir, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
+        super(CCT_cis, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
 
@@ -42,8 +42,8 @@ class CCT_trans(CCT):
 
     name = 'CCT_trans'
 
-    def __init__(self, rootdir, dset='test', transform=None):
-        super(CCT_trans, self).__init__(rootdir=rootdir, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
+        super(CCT_trans, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
         assert self.dset != 'train', 'CCT_trans does not have training data currently. \n'
         ann_dir = os.path.join(self.ann_root, 'trans_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
