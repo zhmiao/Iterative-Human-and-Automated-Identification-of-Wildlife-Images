@@ -1,5 +1,8 @@
-import torch
-from torch.utils.data import DataLoader
+import os
+import numpy as np
+from PIL import Image
+
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
 # Standard data transform with resize and typical augmentation
@@ -66,4 +69,41 @@ def load_dataset(name, dset, batch_size=64, rootdir='', shuffle=True, num_worker
 
     return loader
 
+
+class BaseDataset(Dataset):
+
+    def __init__(self, class_indices, dset='train', transform=None):
+        self.img_root = None
+        self.ann_root = None
+        self.class_indices = class_indices
+        self.dset = dset
+        self.transform = transform
+        self.data = []
+        self.labels = []
+
+    def load_data(self, ann_dir):
+        pass
+
+    def class_counts_cal(self):
+        label_counts = np.array([0 for _ in range(len(self.class_indices))])
+        unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
+        for i in range(len(unique_labels)):
+            label_counts[unique_labels[i]] = unique_counts[i]
+        return unique_labels, label_counts
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, index):
+        file_id = self.data[index]
+        label = self.labels[index]
+        file_dir = os.path.join(self.img_root, file_id + '.jpg')
+
+        with open(file_dir, 'rb') as f:
+            sample = Image.open(f).convert('RGB')
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        return sample, label
 
