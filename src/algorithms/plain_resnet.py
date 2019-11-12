@@ -18,6 +18,8 @@ def load_data(args):
     Dataloading function. This function can change alg by alg as well.
     """
 
+    print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
+
     trainloader = load_dataset(name=args.dataset_name,
                                class_indices=class_indices[args.class_indices],
                                dset='train',

@@ -47,7 +47,6 @@ def get_dataset(name, rootdir, class_indices, dset):
     """
 
     print('Getting dataset: {} {} {} \n'.format(name, rootdir, dset))
-    print('Using class indices: {} \n'.format(class_indices))
 
     return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, transform=data_transforms[dset])
 
