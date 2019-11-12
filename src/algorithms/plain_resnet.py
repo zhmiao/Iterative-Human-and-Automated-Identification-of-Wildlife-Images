@@ -8,7 +8,41 @@ import torch.optim as optim
 
 from .utils import register_algorithm, Algorithm
 from src.data.utils import load_dataset
+from src.data.class_indices import class_indices
 from src.models.utils import get_model
+
+
+def load_data(args):
+
+    """
+    Dataloading function. This function can change alg by alg as well.
+    """
+
+    trainloader = load_dataset(name=args.dataset_name,
+                               class_indices=class_indices[args.class_indices],
+                               dset='train',
+                               rootdir=args.dataset_root,
+                               batch_size=args.batch_size,
+                               shuffle=True,
+                               num_workers=args.num_workers)
+
+    testloader = load_dataset(name=args.dataset_name,
+                              class_indices=class_indices[args.class_indices],
+                              dset='test',
+                              rootdir=args.dataset_root,
+                              batch_size=args.batch_size,
+                              shuffle=False,
+                              num_workers=args.num_workers)
+
+    valloader = load_dataset(name=args.dataset_name,
+                             class_indices=class_indices[args.class_indices],
+                             dset='val',
+                             rootdir=args.dataset_root,
+                             batch_size=args.batch_size,
+                             shuffle=False,
+                             num_workers=args.num_workers)
+
+    return trainloader, testloader, valloader
 
 
 @register_algorithm('PlainResNet')
@@ -23,32 +57,22 @@ class PlainResNet(Algorithm):
     def __init__(self, args):
         super(PlainResNet, self).__init__(args=args)
 
+        # Training epochs and logging intervals
+        self.num_epochs = args.num_epochs
+        self.log_interval = args.log_interval
+
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader = load_dataset(name=self.args.dataset_name, class_indices=self.args.class_indices,
-                                        dset='train', rootdir=self.args.dataset_root,
-                                        batch_size=self.args.batch_size, shuffle=True,
-                                        num_workers=self.args.num_workers)
-
-        self.testloader = load_dataset(name=self.args.dataset_name, class_indices=self.args.class_indices,
-                                       dset='test', rootdir=self.args.dataset_root,
-                                       batch_size=self.args.batch_size, shuffle=False,
-                                       num_workers=self.args.num_workers)
-
-        self.valloader = load_dataset(name=self.args.dataset_name, class_indices=self.args.class_indices,
-                                      dset='val', rootdir=self.args.dataset_root,
-                                      batch_size=self.args.batch_size, shuffle=False,
-                                      num_workers=self.args.num_workers)
-
+        self.trainloader, self.testloader, self.valloader = load_data(args)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
         ###########################
         # Setup cuda and networks #
         ###########################
         # setup network
-        self.net = get_model(name=self.args.model_name, num_cls=self.args.num_cls,
-                             weights_init=self.args.weights_init, num_layers=self.args.num_layers)
+        self.net = get_model(name=args.model_name, num_cls=args.num_cls,
+                             weights_init=args.weights_init, num_layers=args.num_layers)
         # print network and arguments
         print(self.net)
 
@@ -58,17 +82,17 @@ class PlainResNet(Algorithm):
         # Setup optimizer parameters for each network component
         net_optim_params_list = [
             {'params': self.net.feature.parameters(),
-             'lr': self.args.lr_feature,
-             'momentum': self.args.momentum_feature,
-             'weight_decay': self.args.weight_decay_feature},
+             'lr': args.lr_feature,
+             'momentum': args.momentum_feature,
+             'weight_decay': args.weight_decay_feature},
             {'params': self.net.classifier.parameters(),
-             'lr': self.args.lr_classifier,
-             'momentum': self.args.momentum_classifier,
-             'weight_decay': self.args.weight_decay_classifier}
+             'lr': args.lr_classifier,
+             'momentum': args.momentum_classifier,
+             'weight_decay': args.weight_decay_classifier}
         ]
         # Setup optimizer and optimizer scheduler
         self.opt_net = optim.SGD(net_optim_params_list)
-        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
+        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=args.step_size, gamma=args.gamma)
 
     def train_epoch(self, epoch):
 
@@ -112,7 +136,7 @@ class PlainResNet(Algorithm):
             ###########
             # Logging #
             ###########
-            if batch_idx % self.args.log_interval == 0:
+            if batch_idx % self.log_interval == 0:
                 # compute overall acc
                 preds = logits.argmax(dim=1)
                 acc = (preds == labels).float().mean()
@@ -124,7 +148,7 @@ class PlainResNet(Algorithm):
 
         best_acc = 0.
 
-        for epoch in range(self.args.num_epochs):
+        for epoch in range(self.num_epochs):
 
             # Training
             self.train_epoch(epoch)
@@ -179,7 +203,6 @@ class PlainResNet(Algorithm):
                                                                         class_acc[i] * 100)
 
         # Record missing classes in evaluation sets if exist
-        # TODO: Change the class_labels to general configurable class label dictionary
         missing_classes = list(set(loader.dataset.class_labels.values()) - set(loader_uni_class))
         eval_info += 'Missing classes in evaluation set: '
         for c in missing_classes:
