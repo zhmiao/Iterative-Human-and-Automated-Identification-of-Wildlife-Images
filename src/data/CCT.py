@@ -22,7 +22,7 @@ class CCT(BaseDataset):
 
         for entry in annotations:
             self.data.append(entry['image_id'])
-            assert entry['category_id'] in self.class_indicies.keys()
+            assert entry['category_id'] in self.class_indices.keys()
             self.labels.append(self.class_indices[entry['category_id']])
 
 
