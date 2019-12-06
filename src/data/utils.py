@@ -76,7 +76,6 @@ class BaseDataset(Dataset):
         self.img_root = None
         self.ann_root = None
         self.class_indices = class_indices
-        self.class_labels = self.class_indices.keys()
         self.dset = dset
         self.transform = transform
         self.data = []

@@ -14,7 +14,7 @@ class MOZ(BaseDataset):
         with open(ann_dir, 'r') as f:
             for line in f:
                 line_sp = line.replace('\n', '').split(' ')
-                assert line_sp[1] in self.class_labels
+                assert line_sp[1] in self.class_indices.keys()
                 self.data.append(line_sp[0])
                 self.labels.append(self.class_indices[line_sp[1]])
 
