@@ -205,7 +205,7 @@ class PlainResNet(Algorithm):
                                                                         class_acc[i] * 100)
 
         # Record missing classes in evaluation sets if exist
-        missing_classes = list(set(loader.dataset.class_labels.values()) - set(loader_uni_class))
+        missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
         eval_info += 'Missing classes in evaluation set: '
         for c in missing_classes:
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])

@@ -97,7 +97,9 @@ class BaseDataset(Dataset):
     def __getitem__(self, index):
         file_id = self.data[index]
         label = self.labels[index]
-        file_dir = os.path.join(self.img_root, file_id + '.jpg')
+        file_dir = os.path.join(self.img_root, file_id)
+        if not file_dir.endswith('.JPG'):
+            file_dir += '.jpg'
 
         with open(file_dir, 'rb') as f:
             sample = Image.open(f).convert('RGB')
