@@ -28,7 +28,7 @@ class MOZ_S1(MOZ):
         super(MOZ_S1, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
-        ann_dir = os.path.join(self.ann_root, '{}_season_{}.txt'.format(self.dset, 1))
+        ann_dir = os.path.join(self.ann_root, '{}_split_{}.txt'.format(self.dset, 1))
         self.load_data(ann_dir)
 
 
@@ -41,6 +41,17 @@ class MOZ_S2(MOZ):
         super(MOZ_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
-        ann_dir = os.path.join(self.ann_root, '{}_season_{}.txt'.format(self.dset, 2))
+        ann_dir = os.path.join(self.ann_root, '{}_split_{}.txt'.format(self.dset, 2))
         self.load_data(ann_dir)
 
+@register_dataset_obj('MOZ_S3')
+class MOZ_S2(MOZ):
+
+    name = 'MOZ_S2'
+
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
+        super(MOZ_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
+        if self.dset == 'val':
+            self.dset = 'test'  # MOZ does not use val for now.
+        ann_dir = os.path.join(self.ann_root, '{}_split_{}.txt'.format(self.dset, 2))
+        self.load_data(ann_dir)
