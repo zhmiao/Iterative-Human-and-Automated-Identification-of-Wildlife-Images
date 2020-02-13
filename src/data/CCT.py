@@ -26,25 +26,25 @@ class CCT(BaseDataset):
             self.labels.append(self.class_indices[entry['category_id']])
 
 
-@register_dataset_obj('CCT_cis')
-class CCT_cis(CCT):
+@register_dataset_obj('CCT_CIS')
+class CCT_CIS(CCT):
 
-    name = 'CCT_cis'
+    name = 'CCT_CIS'
 
     def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(CCT_cis, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
+        super(CCT_CIS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
 
 
-@register_dataset_obj('CCT_trans')
-class CCT_trans(CCT):
+@register_dataset_obj('CCT_TRANS')
+class CCT_TRANS(CCT):
 
-    name = 'CCT_trans'
+    name = 'CCT_TRANS'
 
     def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(CCT_trans, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
-        assert self.dset != 'train', 'CCT_trans does not have training data currently. \n'
+        super(CCT_TRANS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
+        assert self.dset != 'train', 'CCT_TRANS does not have training data currently. \n'
         ann_dir = os.path.join(self.ann_root, 'trans_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
 
