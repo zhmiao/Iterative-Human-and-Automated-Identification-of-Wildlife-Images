@@ -160,7 +160,7 @@ class PlainResNet(Algorithm):
             self.logger.info('\nValidation.')
             eval_info, val_acc_mac, val_acc_mic = self.evaluate(self.valloader)
             self.logger.info(eval_info)
-            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(val_acc_mac, val_acc_mic))
+            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(val_acc_mac*100, val_acc_mic*100))
             if val_acc_mac > best_acc:
                 self.net.update_best()
 
