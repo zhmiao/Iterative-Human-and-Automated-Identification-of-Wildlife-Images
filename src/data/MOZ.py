@@ -5,8 +5,8 @@ from .utils import register_dataset_obj, BaseDataset
 
 class MOZ(BaseDataset):
 
-    def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(MOZ, self).__init__(class_indices=class_indices, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(MOZ, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform)
         self.img_root = os.path.join(rootdir, 'Mozambique')
         self.ann_root = os.path.join(rootdir, 'Mozambique', 'SplitLists')
 
@@ -24,12 +24,15 @@ class MOZ_S1(MOZ):
 
     name = 'MOZ_S1'
 
-    def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(MOZ_S1, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(MOZ_S1, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                     split=split, transform=transform)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
         ann_dir = os.path.join(self.ann_root, '{}_split_{}.txt'.format(self.dset, 1))
         self.load_data(ann_dir)
+        if split is not None:
+            self.data_split()
 
 
 @register_dataset_obj('MOZ_S2')
@@ -37,21 +40,29 @@ class MOZ_S2(MOZ):
 
     name = 'MOZ_S2'
 
-    def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(MOZ_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(MOZ_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                     split=split, transform=transform)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
         ann_dir = os.path.join(self.ann_root, '{}_split_{}.txt'.format(self.dset, 2))
         self.load_data(ann_dir)
+        if split is not None:
+            self.data_split()
+
 
 @register_dataset_obj('MOZ_S3')
-class MOZ_S2(MOZ):
+class MOZ_S3(MOZ):
 
-    name = 'MOZ_S2'
+    name = 'MOZ_S3'
 
-    def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(MOZ_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(MOZ_S3, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                     split=split, transform=transform)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
         ann_dir = os.path.join(self.ann_root, '{}_split_{}.txt'.format(self.dset, 2))
         self.load_data(ann_dir)
+        if split is not None:
+            self.data_split()
+

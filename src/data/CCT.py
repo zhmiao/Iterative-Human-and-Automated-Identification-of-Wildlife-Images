@@ -6,8 +6,8 @@ from .utils import register_dataset_obj, BaseDataset
 
 class CCT(BaseDataset):
 
-    def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(CCT, self).__init__(class_indices=class_indices, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(CCT, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform)
         self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_all_images_256')
         self.ann_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_annotation_files')
 
@@ -31,10 +31,13 @@ class CCT_CIS(CCT):
 
     name = 'CCT_CIS'
 
-    def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(CCT_CIS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(CCT_CIS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                      split=split, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
+        if split is not None:
+            self.data_split()
 
 
 @register_dataset_obj('CCT_TRANS')
@@ -42,11 +45,14 @@ class CCT_TRANS(CCT):
 
     name = 'CCT_TRANS'
 
-    def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(CCT_TRANS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(CCT_TRANS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                        split=split, transform=transform)
         assert self.dset != 'train', 'CCT_TRANS does not have training data currently. \n'
         ann_dir = os.path.join(self.ann_root, 'trans_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
+        if split is not None:
+            self.data_split()
 
 
 
