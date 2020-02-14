@@ -61,4 +61,6 @@ setattr(args, 'logger', logger)
 alg = get_algorithm(args.algorithm, args)
 if not args.evaluate:
     alg.train()
+else:
+    alg.evaluate(alg.testloader)
 
