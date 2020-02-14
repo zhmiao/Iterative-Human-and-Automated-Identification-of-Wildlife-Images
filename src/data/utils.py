@@ -124,8 +124,8 @@ class BaseDataset(Dataset):
                 data_sel = np.concatenate((data_sel, data_cat))
                 labels_sel = np.concatenate((labels_sel, labels_cat))
 
-        self.data = data_sel
-        self.labels = labels_sel
+        self.data = list(data_sel)
+        self.labels = list(labels_sel.astype(int))
 
     def __len__(self):
         return len(self.labels)
