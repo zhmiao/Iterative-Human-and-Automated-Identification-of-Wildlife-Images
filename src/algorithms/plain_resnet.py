@@ -23,6 +23,7 @@ def load_data(args):
     trainloader = load_dataset(name=args.dataset_name,
                                class_indices=class_indices[args.class_indices],
                                dset='train',
+                               split=args.train_split,
                                rootdir=args.dataset_root,
                                batch_size=args.batch_size,
                                shuffle=True,
@@ -31,6 +32,7 @@ def load_data(args):
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=class_indices[args.class_indices],
                               dset='test',
+                              split=None,
                               rootdir=args.dataset_root,
                               batch_size=args.batch_size,
                               shuffle=False,
@@ -39,6 +41,7 @@ def load_data(args):
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=class_indices[args.class_indices],
                              dset='val',
+                             split=None,
                              rootdir=args.dataset_root,
                              batch_size=args.batch_size,
                              shuffle=False,
@@ -160,7 +163,7 @@ class PlainResNet(Algorithm):
             self.logger.info('\nValidation.')
             eval_info, val_acc_mac, val_acc_mic = self.evaluate(self.valloader)
             self.logger.info(eval_info)
-            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(val_acc_mac, val_acc_mic))
+            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(val_acc_mac*100, val_acc_mic*100))
             if val_acc_mac > best_acc:
                 self.net.update_best()
 

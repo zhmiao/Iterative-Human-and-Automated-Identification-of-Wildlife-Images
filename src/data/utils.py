@@ -40,7 +40,7 @@ def register_dataset_obj(name):
     return decorator
 
 
-def get_dataset(name, rootdir, class_indices, dset):
+def get_dataset(name, rootdir, class_indices, dset, split):
 
     """
     Dataset getter
@@ -48,10 +48,14 @@ def get_dataset(name, rootdir, class_indices, dset):
 
     print('Getting dataset: {} {} {} \n'.format(name, rootdir, dset))
 
-    return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, transform=data_transforms[dset])
+    if dset != 'train':
+        split = None
+
+    return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, split=split,
+                             transform=data_transforms[dset])
 
 
-def load_dataset(name, class_indices, dset, batch_size=64, rootdir='', shuffle=True, num_workers=1):
+def load_dataset(name, class_indices, dset, split, batch_size=64, rootdir='', shuffle=True, num_workers=1):
 
     """
     Dataset loader
@@ -60,7 +64,7 @@ def load_dataset(name, class_indices, dset, batch_size=64, rootdir='', shuffle=T
     if dset != 'train':
         shuffle = False
 
-    dataset = get_dataset(name, rootdir, class_indices, dset)
+    dataset = get_dataset(name, rootdir, class_indices, dset, split=split)
 
     if len(dataset) == 0:
         return None
@@ -72,11 +76,12 @@ def load_dataset(name, class_indices, dset, batch_size=64, rootdir='', shuffle=T
 
 class BaseDataset(Dataset):
 
-    def __init__(self, class_indices, dset='train', transform=None):
+    def __init__(self, class_indices, dset='train', split=None, transform=None):
         self.img_root = None
         self.ann_root = None
         self.class_indices = class_indices
         self.dset = dset
+        self.split = split
         self.transform = transform
         self.data = []
         self.labels = []
@@ -90,6 +95,37 @@ class BaseDataset(Dataset):
         for i in range(len(unique_labels)):
             label_counts[unique_labels[i]] = unique_counts[i]
         return unique_labels, label_counts
+
+    def data_split(self):
+        print('Splitting data to {} samples each class maximum.'.format(self.split))
+
+        self.data = np.array(self.data)
+        self.labels = np.array(self.labels)
+
+        data_sel = np.empty(shape=0)
+        labels_sel = np.empty(shape=0)
+
+        unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
+
+        for label, counts in zip(unique_labels, unique_counts):
+
+            data_cat = self.data[self.labels == label]
+            labels_cat = self.labels[self.labels == label]
+
+            if counts > self.split:
+
+                np.random.seed(label)
+
+                indices_sel = np.random.choice(np.arange(len(data_cat)), self.split, replace=False)
+
+                data_sel = np.concatenate((data_sel, data_cat[indices_sel]))
+                labels_sel = np.concatenate((labels_sel, labels_cat[indices_sel]))
+            else:
+                data_sel = np.concatenate((data_sel, data_cat))
+                labels_sel = np.concatenate((labels_sel, labels_cat))
+
+        self.data = data_sel
+        self.labels = labels_sel
 
     def __len__(self):
         return len(self.labels)
@@ -108,4 +144,5 @@ class BaseDataset(Dataset):
             sample = self.transform(sample)
 
         return sample, label
+
 
