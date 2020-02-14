@@ -1,7 +1,6 @@
 import os
-import shutil
+
 import yaml
-from  datetime import datetime
 import logging
 from argparse import ArgumentParser
 
@@ -17,15 +16,23 @@ parser.add_argument('--session', default=0,
                     help='Session id.')
 parser.add_argument('--gpu', default='0',
                     help='GPU id.')
+parser.add_argument('--np_threads', default=4,
+                    help='Num of threads of numpy.')
 parser.add_argument('--evaluate', default=False, action='store_true',
                     help='If evaluate the model.')
 args = parser.parse_args()
 
-###########
-# Set gpu #
-###########
+#############################
+# Set environment variables #
+#############################
+# Set GPU
 os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
-
+# Set numpy threads
+os.environ["OMP_NUM_THREADS"] = str(args.np_threads)
+os.environ["OPENBLAS_NUM_THREADS"] = str(args.np_threads)
+os.environ["MKL_NUM_THREADS"] = str(args.np_threads)
+os.environ["VECLIB_MAXIMUM_THREADS"] = str(args.np_threads)
+os.environ["NUMEXPR_NUM_THREADS"] = str(args.np_threads)
 
 ###############################
 # Load configurations to args #
