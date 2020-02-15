@@ -60,7 +60,9 @@ setattr(args, 'logger', logger)
 ##############
 alg = get_algorithm(args.algorithm, args)
 if not args.evaluate:
+    alg.logger.info('\nTraining...')
     alg.train()
 else:
-    alg.evaluate(alg.testloader)
+    alg.logger.info('\nTesting...')
+    _ = alg.evaluate(mode='test')
 
