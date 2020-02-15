@@ -76,10 +76,9 @@ class PlainResNet(Algorithm):
         # Setup cuda and networks #
         ###########################
         # setup network
+        self.logger.info('\nGetting {} model.'.format(args.model_name))
         self.net = get_model(name=args.model_name, num_cls=len(class_indices[args.class_indices]),
                              weights_init=args.weights_init, num_layers=args.num_layers)
-        # print network and arguments
-        print(self.net)
 
         ######################
         # Optimization setup #
@@ -149,6 +148,8 @@ class PlainResNet(Algorithm):
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
                 self.logger.info(info_str)
 
+        self.scheduler.step()
+
     def train(self):
 
         best_acc = 0.
@@ -157,19 +158,16 @@ class PlainResNet(Algorithm):
 
             # Training
             self.train_epoch(epoch)
-            self.scheduler.step()
 
             # Validation
             self.logger.info('\nValidation.')
-            eval_info, val_acc_mac, val_acc_mic = self.evaluate(self.valloader)
-            self.logger.info(eval_info)
-            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(val_acc_mac*100, val_acc_mic*100))
+            val_acc_mac = self.evaluate(self.valloader)
             if val_acc_mac > best_acc:
                 self.net.update_best()
 
         self.save_model()
 
-    def evaluate(self, loader):
+    def evaluate_epoch(self, loader):
 
         self.net.eval()
 
@@ -215,7 +213,20 @@ class PlainResNet(Algorithm):
 
         return eval_info, class_acc.mean(), overall_acc
 
+    def evaluate(self, loader):
+
+        eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
+        self.logger.info(eval_info)
+        self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
+
+        return eval_acc_mac
+
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
         self.logger.info('Saving to {}'.format(self.weights_path))
         self.net.save(self.weights_path)
+
+    def load_model(self):
+        self.logger.info('Loading from {}'.format(self.weights_path))
+        self.net.load(self.weights_path)
+

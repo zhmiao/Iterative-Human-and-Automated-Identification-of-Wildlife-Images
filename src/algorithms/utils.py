@@ -42,9 +42,15 @@ class Algorithm:
     def train(self):
         pass
 
+    def evaluate_epoch(self, loader):
+        pass
+
     def evaluate(self, loader):
         pass
 
     def save_model(self):
+        pass
+
+    def load_model(self):
         pass
 
