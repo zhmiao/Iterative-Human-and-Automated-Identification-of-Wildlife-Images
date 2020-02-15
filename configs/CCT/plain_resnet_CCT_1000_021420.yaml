@@ -1,16 +1,16 @@
 # training
-conf_id: 021320
+conf_id: 021420_sp1000
 algorithm: PlainResNet
-num_epochs: 1
+num_epochs: 30
 log_interval: 1
 
 # data
 dataset_root: /home/zhmiao/datasets/ecology
 dataset_name: CCT_CIS
 class_indices: CCT
-train_split: 100 # Set to blank for full dataset
+train_split: 1000 # Set to blank for full dataset
 batch_size: 64
-num_workers: 8
+num_workers: 4
 
 # model
 model_name: PlainResNetClassifier
@@ -23,9 +23,10 @@ lr_feature: 0.01
 momentum_feature: 0.9
 weight_decay_feature: 0.0005
 ## classifier
-lr_classifier: 0.01
+lr_classifier: 0.1
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
 ## lr_scheduler
-step_size: 20
+step_size: 10
 gamma: 0.1
+
