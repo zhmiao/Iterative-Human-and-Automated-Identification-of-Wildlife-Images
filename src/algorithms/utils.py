@@ -51,3 +51,6 @@ class Algorithm:
     def save_model(self):
         pass
 
+    def load_model(self):
+        pass
+
