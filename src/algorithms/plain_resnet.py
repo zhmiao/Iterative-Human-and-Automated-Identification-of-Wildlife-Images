@@ -161,15 +161,13 @@ class PlainResNet(Algorithm):
 
             # Validation
             self.logger.info('\nValidation.')
-            eval_info, val_acc_mac, val_acc_mic = self.evaluate(self.valloader)
-            self.logger.info(eval_info)
-            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(val_acc_mac*100, val_acc_mic*100))
+            val_acc_mac = self.evaluate(mode='val')
             if val_acc_mac > best_acc:
                 self.net.update_best()
 
         self.save_model()
 
-    def evaluate(self, loader):
+    def evaluate_epoch(self, loader):
 
         self.net.eval()
 
@@ -214,6 +212,22 @@ class PlainResNet(Algorithm):
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
         return eval_info, class_acc.mean(), overall_acc
+
+    def evaluate(self, mode='val'):
+
+        if mode == 'val':
+            loader = self.valloader
+        elif mode == 'test':
+            loader = self.testloader
+        else:
+            loader = None
+            raise ValueError('Mode {} does not for evaluation.'.format(mode))
+
+        eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
+        self.logger.info(eval_info)
+        self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
+
+        return eval_acc_mac
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
