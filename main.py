@@ -63,6 +63,7 @@ if not args.evaluate:
     alg.logger.info('\nTraining...')
     alg.train()
 else:
+    alg.load_model()
     alg.logger.info('\nTesting...')
-    _ = alg.evaluate(mode='test')
+    _ = alg.evaluate(loader=alg.testloader)
 
