@@ -1,3 +1,4 @@
+import os
 import copy
 import torch
 import torch.nn as nn
@@ -25,8 +26,10 @@ class PlainResNetClassifier(BaseModule):
         self.setup_net()
         if weights_init == 'ImageNet':
             self.load_features(model_urls['resnet{}'.format(num_layers)])
+        elif os.path.exists(weights_init):
+            self.load_features(weights_init)
         else:
-            raise Exception('Pretrained weights not supported.')
+            raise Exception('Pretrained weights not properly set up.')
 
         # Criteria setup
         self.setup_critera()
