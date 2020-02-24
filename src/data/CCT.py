@@ -26,14 +26,42 @@ class CCT(BaseDataset):
             self.labels.append(self.class_indices[entry['category_id']])
 
 
-@register_dataset_obj('CCT_CIS')
-class CCT_CIS(CCT):
+@register_dataset_obj('CCT_CIS_S1')
+class CCT_CIS_S1(CCT):
 
-    name = 'CCT_CIS'
+    name = 'CCT_CIS_S1'
 
     def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
-        super(CCT_CIS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                      split=split, transform=transform)
+        super(CCT_CIS_S1, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                         split=split, transform=transform)
+        ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_1.json'.format(dset))
+        self.load_data(ann_dir)
+        if split is not None:
+            self.data_split()
+
+
+@register_dataset_obj('CCT_CIS_S2')
+class CCT_CIS_S2(CCT):
+
+    name = 'CCT_CIS_S2'
+
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(CCT_CIS_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                         split=split, transform=transform)
+        ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_2.json'.format(dset))
+        self.load_data(ann_dir)
+        if split is not None:
+            self.data_split()
+
+
+@register_dataset_obj('CCT_CIS_ALL')
+class CCT_CIS_ALL(CCT):
+
+    name = 'CCT_CIS_ALL'
+
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(CCT_CIS_ALL, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                          split=split, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
