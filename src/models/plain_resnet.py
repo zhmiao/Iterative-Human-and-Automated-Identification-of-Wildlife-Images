@@ -25,9 +25,9 @@ class PlainResNetClassifier(BaseModule):
         # Model setup and weights initialization
         self.setup_net()
         if weights_init == 'ImageNet':
-            self.load_features(model_urls['resnet{}'.format(num_layers)])
+            self.load(model_urls['resnet{}'.format(num_layers)], feat_only=True)
         elif os.path.exists(weights_init):
-            self.load_features(weights_init)
+            self.load(weights_init, feat_only=False)
 
         # Criteria setup
         self.setup_critera()
@@ -54,35 +54,22 @@ class PlainResNetClassifier(BaseModule):
     def setup_critera(self):
         self.criterion_cls = nn.CrossEntropyLoss()
 
-    def load(self, init_path):
+    def load(self, init_path, feat_only=False):
 
         if 'http' in init_path:
             init_weights = load_state_dict_from_url(init_path, progress=True)
         else:
             init_weights = torch.load(init_path)
 
-        self.load_state_dict(init_weights, strict=False)
-
-        load_keys = set(init_weights.keys())
-        self_keys = set(self.state_dict().keys())
-        missing_keys = self_keys - load_keys
-        unused_keys = load_keys - self_keys
-
-        print('Loading weights: ')
-        print('missing keys: {}'.format(sorted(list(missing_keys))))
-        print('unused_keys: {}'.format(sorted(list(unused_keys))))
-
-    def load_features(self, init_path):
-
-        if 'http' in init_path:
-            init_weights = load_state_dict_from_url(init_path, progress=True)
+        if feat_only:
+            self.feature.load_state_dict(init_weights, strict=False)
+            load_keys = set(init_weights.keys())
+            self_keys = set(self.feature.state_dict().keys())
         else:
-            init_weights = torch.load(init_path)
+            self.load_state_dict(init_weights, strict=False)
+            load_keys = set(init_weights.keys())
+            self_keys = set(self.state_dict().keys())
 
-        self.feature.load_state_dict(init_weights, strict=False)
-
-        load_keys = set(init_weights.keys())
-        self_keys = set(self.feature.state_dict().keys())
         missing_keys = self_keys - load_keys
         unused_keys = load_keys - self_keys
         print("missing keys: {}".format(sorted(list(missing_keys))))

@@ -107,10 +107,9 @@ class PlainResNet(Algorithm):
         # Load weights for evaluation #
         ###############################
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
-        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init='', num_layers=self.args.num_layers)
         self.logger.info('\nLoading from {}'.format(self.weights_path))
-        self.net.load(self.weights_path)
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path, num_layers=self.args.num_layers)
 
     def train_epoch(self, epoch):
 
@@ -241,6 +240,3 @@ class PlainResNet(Algorithm):
         self.net.save(self.weights_path)
 
 
-@register_algorithm('FineTuneResNet')
-class FineTuneResNet(PlainResNet):
-    pass
