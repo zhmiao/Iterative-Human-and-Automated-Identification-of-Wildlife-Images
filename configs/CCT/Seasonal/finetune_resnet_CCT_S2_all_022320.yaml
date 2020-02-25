@@ -1,6 +1,6 @@
 # training
-conf_id: 022320_S2_spALL
-algorithm: PlainResNet
+conf_id: 022320_FT_S2_spALL
+algorithm: FineTuneResNet
 num_epochs: 30
 log_interval: 1
 
@@ -19,11 +19,11 @@ weights_init: ./weights/PlainResNet/022320_S1_spALL_0.pth
 
 # optim
 ## feature
-lr_feature: 0.01
+lr_feature: 0.0001
 momentum_feature: 0.9
 weight_decay_feature: 0.0005
 ## classifier
-lr_classifier: 0.1
+lr_classifier: 0.001
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
 ## lr_scheduler
