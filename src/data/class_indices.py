@@ -119,7 +119,6 @@ class_indices['CCT_S1'] = {
     8: 6,
     6: 7,
     11: 8,
-    99: 9
 }
 
 class_indices['CCT_S2'] = {
