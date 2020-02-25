@@ -36,6 +36,12 @@ class Algorithm:
         self.logger = self.args.logger
         self.weights_path = './weights/{}/{}_{}.pth'.format(self.args.algorithm, self.args.conf_id, self.args.session)
 
+    def set_train(self):
+        pass
+
+    def set_eval(self):
+        pass
+
     def train_epoch(self, epoch):
         pass
 
@@ -49,8 +55,5 @@ class Algorithm:
         pass
 
     def save_model(self):
-        pass
-
-    def load_model(self):
         pass
 

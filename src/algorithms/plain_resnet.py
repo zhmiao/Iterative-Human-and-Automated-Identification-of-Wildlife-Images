@@ -58,6 +58,9 @@ class PlainResNet(Algorithm):
     """
 
     name = 'PlainResNet'
+    net = None
+    opt_net = None
+    scheduler = None
 
     def __init__(self, args):
         super(PlainResNet, self).__init__(args=args)
@@ -72,13 +75,14 @@ class PlainResNet(Algorithm):
         self.trainloader, self.testloader, self.valloader = load_data(args)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
+    def set_train(self):
         ###########################
         # Setup cuda and networks #
         ###########################
         # setup network
-        self.logger.info('\nGetting {} model.'.format(args.model_name))
-        self.net = get_model(name=args.model_name, num_cls=len(class_indices[args.class_indices]),
-                             weights_init=args.weights_init, num_layers=args.num_layers)
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers)
 
         ######################
         # Optimization setup #
@@ -86,17 +90,27 @@ class PlainResNet(Algorithm):
         # Setup optimizer parameters for each network component
         net_optim_params_list = [
             {'params': self.net.feature.parameters(),
-             'lr': args.lr_feature,
-             'momentum': args.momentum_feature,
-             'weight_decay': args.weight_decay_feature},
+             'lr': self.args.lr_feature,
+             'momentum': self.args.momentum_feature,
+             'weight_decay': self.args.weight_decay_feature},
             {'params': self.net.classifier.parameters(),
-             'lr': args.lr_classifier,
-             'momentum': args.momentum_classifier,
-             'weight_decay': args.weight_decay_classifier}
+             'lr': self.args.lr_classifier,
+             'momentum': self.args.momentum_classifier,
+             'weight_decay': self.args.weight_decay_classifier}
         ]
         # Setup optimizer and optimizer scheduler
         self.opt_net = optim.SGD(net_optim_params_list)
-        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=args.step_size, gamma=args.gamma)
+        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
+
+    def set_eval(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init='', num_layers=self.args.num_layers)
+        self.logger.info('\nLoading from {}'.format(self.weights_path))
+        self.net.load(self.weights_path)
 
     def train_epoch(self, epoch):
 
@@ -226,7 +240,7 @@ class PlainResNet(Algorithm):
         self.logger.info('Saving to {}'.format(self.weights_path))
         self.net.save(self.weights_path)
 
-    def load_model(self):
-        self.logger.info('Loading from {}'.format(self.weights_path))
-        self.net.load(self.weights_path)
 
+@register_algorithm('FineTuneResNet')
+class FineTuneResNet(PlainResNet):
+    pass
