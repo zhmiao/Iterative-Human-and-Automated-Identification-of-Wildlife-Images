@@ -82,7 +82,7 @@ class PlainResNet(Algorithm):
         # setup network
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.args.weights_init, num_layers=self.args.num_layers)
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True)
 
         ######################
         # Optimization setup #
@@ -109,7 +109,7 @@ class PlainResNet(Algorithm):
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.logger.info('\nLoading from {}'.format(self.weights_path))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.weights_path, num_layers=self.args.num_layers)
+                             weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
 
     def train_epoch(self, epoch):
 
@@ -240,3 +240,39 @@ class PlainResNet(Algorithm):
         self.net.save(self.weights_path)
 
 
+@register_algorithm('FineTuneResNet')
+class FineTuneResNet(PlainResNet):
+
+    """
+    Overall training function.
+    """
+
+    name = 'FineTuneResNet'
+
+    def set_train(self):
+        ###########################
+        # Setup cuda and networks #
+        ###########################
+        # setup network
+        # The only thing different from plain resnet is that init_feat_only is set to true now
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True)
+
+        ######################
+        # Optimization setup #
+        ######################
+        # Setup optimizer parameters for each network component
+        net_optim_params_list = [
+            {'params': self.net.feature.parameters(),
+             'lr': self.args.lr_feature,
+             'momentum': self.args.momentum_feature,
+             'weight_decay': self.args.weight_decay_feature},
+            {'params': self.net.classifier.parameters(),
+             'lr': self.args.lr_classifier,
+             'momentum': self.args.momentum_classifier,
+             'weight_decay': self.args.weight_decay_classifier}
+        ]
+        # Setup optimizer and optimizer scheduler
+        self.opt_net = optim.SGD(net_optim_params_list)
+        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
