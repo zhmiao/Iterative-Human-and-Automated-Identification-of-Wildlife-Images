@@ -28,8 +28,6 @@ class PlainResNetClassifier(BaseModule):
             self.load_features(model_urls['resnet{}'.format(num_layers)])
         elif os.path.exists(weights_init):
             self.load_features(weights_init)
-        else:
-            raise Exception('Pretrained weights not properly set up.')
 
         # Criteria setup
         self.setup_critera()
