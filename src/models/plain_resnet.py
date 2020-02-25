@@ -1,5 +1,6 @@
 import os
 import copy
+from collections import OrderedDict
 import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
@@ -13,7 +14,7 @@ class PlainResNetClassifier(BaseModule):
 
     name = 'PlainResNetClassifier'
 
-    def __init__(self, num_cls=10, weights_init='ImageNet', num_layers=18):
+    def __init__(self, num_cls=10, weights_init='ImageNet', num_layers=18, init_feat_only=True):
         super(PlainResNetClassifier, self).__init__()
         self.num_cls = num_cls
         self.num_layers = num_layers
@@ -25,9 +26,9 @@ class PlainResNetClassifier(BaseModule):
         # Model setup and weights initialization
         self.setup_net()
         if weights_init == 'ImageNet':
-            self.load(model_urls['resnet{}'.format(num_layers)], feat_only=True)
+            self.load(model_urls['resnet{}'.format(num_layers)], feat_only=init_feat_only)
         elif os.path.exists(weights_init):
-            self.load(weights_init, feat_only=False)
+            self.load(weights_init, feat_only=init_feat_only)
 
         # Criteria setup
         self.setup_critera()
@@ -62,6 +63,7 @@ class PlainResNetClassifier(BaseModule):
             init_weights = torch.load(init_path)
 
         if feat_only:
+            init_weights = OrderedDict({k.replace('feature.', ''): init_weights[k] for k in init_weights})
             self.feature.load_state_dict(init_weights, strict=False)
             load_keys = set(init_weights.keys())
             self_keys = set(self.feature.state_dict().keys())
