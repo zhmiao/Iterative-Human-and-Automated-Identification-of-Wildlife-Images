@@ -88,7 +88,7 @@ class CCT_CROP(BaseDataset):
 
     def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
         super(CCT_CROP, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform)
-        self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_all_images_256')
+        self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_cropped')
         self.ann_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_annotation_files')
         self.bbox = []
 
@@ -112,12 +112,13 @@ class CCT_CROP(BaseDataset):
         file_id = self.data[index]
         label = self.labels[index]
         bbox = self.bbox[index]
+        pil_bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
         file_dir = os.path.join(self.img_root, file_id)
         if not file_dir.endswith('.JPG'):
             file_dir += '.jpg'
 
         with open(file_dir, 'rb') as f:
-            sample = Image.open(f).convert('RGB').crop(bbox)
+            sample = Image.open(f).convert('RGB').crop(pil_bbox)
             sample = ImageOps.expand(sample, tuple((max(sample.size) - s) // 2 for s in list(sample.size)))
 
         if self.transform is not None:
