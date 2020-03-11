@@ -1,5 +1,6 @@
 import os
 import json
+import numpy as np
 from PIL import Image, ImageOps
 
 from .utils import register_dataset_obj, BaseDataset
@@ -107,6 +108,43 @@ class CCT_CROP(BaseDataset):
                 assert entry['category_id'] in self.class_indices.keys()
                 self.labels.append(self.class_indices[entry['category_id']])
                 self.bbox.append(entry['bbox'])
+
+    def data_split(self):
+        print('Splitting data to {} samples each class maximum.'.format(self.split))
+
+        self.data = np.array(self.data)
+        self.labels = np.array(self.labels)
+        self.bbox = np.array(self.bbox)
+
+        data_sel = np.empty(shape=0)
+        labels_sel = np.empty(shape=0)
+        bbox_sel = np.empty(shape=(0, self.bbox.shape[1]))
+
+        unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
+
+        for label, counts in zip(unique_labels, unique_counts):
+
+            data_cat = self.data[self.labels == label]
+            labels_cat = self.labels[self.labels == label]
+            bbox_cat = self.bbox[self.labels == label]
+
+            if counts > self.split:
+
+                np.random.seed(label)
+
+                indices_sel = np.random.choice(np.arange(len(data_cat)), self.split, replace=False)
+
+                data_sel = np.concatenate((data_sel, data_cat[indices_sel]))
+                labels_sel = np.concatenate((labels_sel, labels_cat[indices_sel]))
+                bbox_sel = np.concatenate((bbox_sel, bbox_cat[indices_sel]))
+            else:
+                data_sel = np.concatenate((data_sel, data_cat))
+                labels_sel = np.concatenate((labels_sel, labels_cat))
+                bbox_sel = np.concatenate((bbox_sel, bbox_cat))
+
+        self.data = list(data_sel)
+        self.labels = list(labels_sel.astype(int))
+        self.bbox = list(bbox_sel)
 
     def __getitem__(self, index):
         file_id = self.data[index]
