@@ -38,7 +38,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = str(args.np_threads)
 # Load configurations to args #
 ###############################
 with open(args.config) as f:
-    config = yaml.load(f)
+    config = yaml.load(f, Loader=yaml.FullLoader)
 for k, v in config.items():
     setattr(args, k, v)
 
