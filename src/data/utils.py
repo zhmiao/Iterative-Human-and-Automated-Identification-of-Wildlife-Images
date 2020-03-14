@@ -8,10 +8,7 @@ from torchvision import transforms
 # Standard data transform with resize and typical augmentation
 data_transforms = {
     'train': transforms.Compose([
-        # transforms.RandomResizedCrop(224, scale=(0.5, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
-        # transforms.RandomHorizontalFlip(),
-        # transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0),
-        transforms.RandomResizedCrop(224, scale=(0.08, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
+        transforms.RandomResizedCrop(224, scale=(0.5, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0),
         transforms.ToTensor(),
