@@ -24,8 +24,12 @@ class CCT(BaseDataset):
 
         for entry in annotations:
             self.data.append(entry['image_id'])
-            assert entry['category_id'] in self.class_indices.keys()
-            self.labels.append(self.class_indices[entry['category_id']])
+            # Assigne -1 to unseen classes
+            if entry['category_id'] in self.class_indices.keys():
+                label = self.class_indices[entry['category_id']]
+            else:
+                label = -1
+            self.labels.append(label)
 
 
 @register_dataset_obj('CCT_CIS_S1')
@@ -105,8 +109,12 @@ class CCT_CROP(BaseDataset):
         for entry in annotations:
             if 'bbox' in entry:
                 self.data.append(entry['image_id'])
-                assert entry['category_id'] in self.class_indices.keys()
-                self.labels.append(self.class_indices[entry['category_id']])
+                # Assigne -1 to unseen classes
+                if entry['category_id'] in self.class_indices.keys():
+                    label = self.class_indices[entry['category_id']]
+                else:
+                    label = -1
+                self.labels.append(label)
                 self.bbox.append(entry['bbox'])
 
     def data_split(self):
