@@ -15,13 +15,7 @@ data_transforms = {
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
-    'val': transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-    'test': transforms.Compose([
+    'eval': transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
@@ -43,7 +37,7 @@ def register_dataset_obj(name):
     return decorator
 
 
-def get_dataset(name, rootdir, class_indices, dset, split):
+def get_dataset(name, rootdir, class_indices, dset, transform, split):
 
     """
     Dataset getter
@@ -55,10 +49,10 @@ def get_dataset(name, rootdir, class_indices, dset, split):
         split = None
 
     return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, split=split,
-                             transform=data_transforms[dset])
+                             transform=data_transforms[transform])
 
 
-def load_dataset(name, class_indices, dset, split, batch_size=64, rootdir='', shuffle=True, num_workers=1):
+def load_dataset(name, class_indices, dset, transform, split, batch_size=64, rootdir='', shuffle=True, num_workers=1):
 
     """
     Dataset loader
@@ -67,7 +61,7 @@ def load_dataset(name, class_indices, dset, split, batch_size=64, rootdir='', sh
     if dset != 'train':
         shuffle = False
 
-    dataset = get_dataset(name, rootdir, class_indices, dset, split=split)
+    dataset = get_dataset(name, rootdir, class_indices, dset, transform, split=split)
 
     if len(dataset) == 0:
         return None
@@ -93,11 +87,8 @@ class BaseDataset(Dataset):
         pass
 
     def class_counts_cal(self):
-        label_counts = np.array([0 for _ in range(len(self.class_indices))])
         unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
-        for i in range(len(unique_labels)):
-            label_counts[unique_labels[i]] = unique_counts[i]
-        return unique_labels, label_counts
+        return unique_labels, unique_counts
 
     def data_split(self):
         print('Splitting data to {} samples each class maximum.'.format(self.split))
