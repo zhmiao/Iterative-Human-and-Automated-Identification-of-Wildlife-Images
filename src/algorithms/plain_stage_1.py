@@ -192,7 +192,6 @@ class PlainStage1(Algorithm):
 
         self.net.eval()
 
-        # TODO: Check open labels
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
 
@@ -231,7 +230,7 @@ class PlainStage1(Algorithm):
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
         for i in range(len(class_acc_confident)):
-            eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
+            eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[i])
             eval_info += 'Confident percentage: {:.2f};'.format(class_percent_confident[i] * 100)
             eval_info += 'Accuracy: {:.3f} \n'.format(class_acc_confident[i] * 100)
 
