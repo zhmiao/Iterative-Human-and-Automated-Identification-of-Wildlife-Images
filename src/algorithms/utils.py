@@ -134,7 +134,10 @@ def stage_1_metric(preds, labels, unique_classes, class_counts):
     class_acc_confident, class_percent_confident, false_pos_percent = confident_metrics(preds, labels, unique_classes, class_counts)
     # Open
     percent_unknown = unknown_metrics(preds, labels)
-    return f1, class_acc_confident, class_percent_confident, false_pos_percent, percent_unknown
+    # Confident indices
+    conf_preds = np.zeros(len(preds))
+    conf_preds[preds != -1] = 1
+    return f1, class_acc_confident, class_percent_confident, false_pos_percent, percent_unknown, conf_preds
 
 
 
