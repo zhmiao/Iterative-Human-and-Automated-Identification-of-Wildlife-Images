@@ -22,6 +22,7 @@ class PlainResNetClassifier(BaseModule):
         self.classifier = None
         self.criterion_cls = None
         self.best_weights = None
+        self.feature_dim = None
 
         # Model setup and weights initialization
         self.setup_net()
@@ -54,6 +55,7 @@ class PlainResNetClassifier(BaseModule):
 
         self.feature = ResNetFeature(block, layers, **kwargs)
         self.classifier = nn.Linear(512 * block.expansion, self.num_cls)
+        self.feature_dim = 512 * block.expansion
 
     def setup_critera(self):
         self.criterion_cls = nn.CrossEntropyLoss()
