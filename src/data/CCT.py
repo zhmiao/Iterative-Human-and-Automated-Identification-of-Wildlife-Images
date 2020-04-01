@@ -8,8 +8,9 @@ from .utils import register_dataset_obj, BaseDataset
 
 class CCT(BaseDataset):
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
-        super(CCT, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+        super(CCT, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform,
+                                  return_index=return_index)
         self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_all_images_256')
         self.ann_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_annotation_files')
 
@@ -37,9 +38,9 @@ class CCT_CIS_S1(CCT):
 
     name = 'CCT_CIS_S1'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
         super(CCT_CIS_S1, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                         split=split, transform=transform)
+                                         split=split, transform=transform, return_index=return_index)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_1.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
@@ -51,9 +52,9 @@ class CCT_CIS_S2(CCT):
 
     name = 'CCT_CIS_S2'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
         super(CCT_CIS_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                         split=split, transform=transform)
+                                         split=split, transform=transform, return_index=return_index)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_2.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
@@ -65,9 +66,9 @@ class CCT_CIS_ALL(CCT):
 
     name = 'CCT_CIS_ALL'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
         super(CCT_CIS_ALL, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                          split=split, transform=transform)
+                                          split=split, transform=transform, return_index=return_index)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
@@ -79,9 +80,9 @@ class CCT_TRANS(CCT):
 
     name = 'CCT_TRANS'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
         super(CCT_TRANS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                        split=split, transform=transform)
+                                        split=split, transform=transform, return_index=return_index)
         assert self.dset != 'train', 'CCT_TRANS does not have training data currently. \n'
         ann_dir = os.path.join(self.ann_root, 'trans_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
@@ -91,8 +92,9 @@ class CCT_TRANS(CCT):
 
 class CCT_CROP(BaseDataset):
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
-        super(CCT_CROP, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+        super(CCT_CROP, self).__init__(class_indices=class_indices, dset=dset, split=split,
+                                       transform=transform, return_index=return_index)
         self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_cropped')
         self.ann_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_annotation_files')
         self.bbox = []
@@ -170,7 +172,10 @@ class CCT_CROP(BaseDataset):
         if self.transform is not None:
             sample = self.transform(sample)
 
-        return sample, label
+        if self.return_index:
+            return sample, label, index
+        else:
+            return sample, label
 
 
 @register_dataset_obj('CCT_CIS_CROP_S1')
@@ -178,9 +183,9 @@ class CCT_CIS_CROP_S1(CCT_CROP):
 
     name = 'CCT_CIS_CROP_S1'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
         super(CCT_CIS_CROP_S1, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                              split=split, transform=transform)
+                                              split=split, transform=transform, return_index=return_index)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_1.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
@@ -192,9 +197,9 @@ class CCT_CIS_CROP_S2(CCT_CROP):
 
     name = 'CCT_CIS_CROP_S2'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
         super(CCT_CIS_CROP_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                              split=split, transform=transform)
+                                              split=split, transform=transform, return_index=return_index)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_2.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
