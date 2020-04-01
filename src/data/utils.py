@@ -73,13 +73,14 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
 
 class BaseDataset(Dataset):
 
-    def __init__(self, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, class_indices, dset='train', split=None, transform=None, return_index=False):
         self.img_root = None
         self.ann_root = None
         self.class_indices = class_indices
         self.dset = dset
         self.split = split
         self.transform = transform
+        self.return_index = return_index
         self.data = []
         self.labels = []
 
@@ -137,6 +138,9 @@ class BaseDataset(Dataset):
         if self.transform is not None:
             sample = self.transform(sample)
 
-        return sample, label
+        if self.return_index:
+            return sample, label, index
+        else:
+            return sample, label
 
 
