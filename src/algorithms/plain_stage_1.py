@@ -245,7 +245,7 @@ class PlainStage1(Algorithm):
         self.logger.info(eval_info)
 
         if loader == self.testloader:
-            conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npz')
+            conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
             self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
             conf_preds.tofile(conf_preds_path)
 
