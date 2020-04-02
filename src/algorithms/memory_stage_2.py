@@ -30,6 +30,8 @@ class MemoryStage2(Algorithm):
     def __init__(self, args):
         super(MemoryStage2, self).__init__(args=args)
 
+        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
+
         # Training epochs and logging intervals
         self.num_epochs = args.num_epochs
         self.log_interval = args.log_interval
@@ -54,10 +56,25 @@ class MemoryStage2(Algorithm):
                              weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True)
 
         # Initial centroids
-        self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
-        stage_1_memory = self.stage_1_mem_flat.reshape(-1, self.net.feature_dim)
-        initial_centroids = self.centroids_cal(self.trainloader).clone().detach().cpu()
-        initial_centroids[:len(stage_1_memory)] = torch.from_numpy(stage_1_memory)
+        initial_centroids_path = self.weights_path.replace('.pth', '_init_centroids.npy')
+        if os.path.exists(initial_centroids_path):
+            self.logger.info('Loading initial centroids from {}.\n'.format(initial_centroids_path))
+            initial_centroids = np.fromfile(initial_centroids_path, dtype=np.float32).reshape(-1, self.net.feature_dim)
+            initial_centroids = torch.from_numpy(initial_centroids)
+        else:
+            self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
+            stage_1_memory = self.stage_1_mem_flat.reshape(-1, self.net.feature_dim)
+            initial_centroids = self.centroids_cal(self.trainloader).clone().detach().cpu().numpy()
+            initial_centroids[:len(stage_1_memory)] = stage_1_memory
+            initial_centroids.tofile(initial_centroids_path)
+            self.logger.info('\nInitial centroids saved to {}.'.format(initial_centroids_path))
+
+        # Intitialize centroids using named parameter to avoid possible bugs
+        with torch.no_grad():
+            for name, param in self.net.criterion_ctr.named_parameters():
+                if name == 'centroids':
+                    print('\nPopulating initial centroids.\n')
+                    param.copy_(torch.from_numpy(initial_centroids))
 
         # TODO: here we calculate the centroids of the training data, replace known classes centorids with intial centroids
 
@@ -73,7 +90,11 @@ class MemoryStage2(Algorithm):
             {'params': self.net.classifier.parameters(),
              'lr': self.args.lr_classifier,
              'momentum': self.args.momentum_classifier,
-             'weight_decay': self.args.weight_decay_classifier}
+             'weight_decay': self.args.weight_decay_classifier},
+            {'params': self.net.criterion_ctr.parameters(),
+             'lr': self.args.lr_memory,
+             'momentum': self.args.momentum_memory,
+             'weight_decay': self.args.weight_decay_memory}
         ]
         # Setup optimizer and optimizer scheduler
         self.opt_net = optim.SGD(net_optim_params_list)
