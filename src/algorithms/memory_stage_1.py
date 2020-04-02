@@ -94,7 +94,7 @@ class MemoryStage1(PlainStage1):
         eval_info += 'False positive percentage: {:.3f} \n'.format(false_pos_percent * 100)
         eval_info += 'Selected unknown percentage: {:.3f} \n'.format(percent_unknown * 100)
 
-        return eval_info, f1, conf_preds, np.array(total_preds)
+        return eval_info, f1, conf_preds, np.concatenate(total_preds, axis=0)
 
     def centroids_cal(self, loader):
 
