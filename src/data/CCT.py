@@ -8,9 +8,8 @@ from .utils import register_dataset_obj, BaseDataset
 
 class CCT(BaseDataset):
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
-        super(CCT, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform,
-                                  return_index=return_index)
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(CCT, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform)
         self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_all_images_256')
         self.ann_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_annotation_files')
 
@@ -38,9 +37,9 @@ class CCT_CIS_S1(CCT):
 
     name = 'CCT_CIS_S1'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
         super(CCT_CIS_S1, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                         split=split, transform=transform, return_index=return_index)
+                                         split=split, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_1.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
@@ -52,9 +51,9 @@ class CCT_CIS_S2(CCT):
 
     name = 'CCT_CIS_S2'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
         super(CCT_CIS_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                         split=split, transform=transform, return_index=return_index)
+                                         split=split, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_2.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
@@ -66,9 +65,9 @@ class CCT_CIS_ALL(CCT):
 
     name = 'CCT_CIS_ALL'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
         super(CCT_CIS_ALL, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                          split=split, transform=transform, return_index=return_index)
+                                          split=split, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
@@ -80,9 +79,9 @@ class CCT_TRANS(CCT):
 
     name = 'CCT_TRANS'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
         super(CCT_TRANS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                        split=split, transform=transform, return_index=return_index)
+                                        split=split, transform=transform)
         assert self.dset != 'train', 'CCT_TRANS does not have training data currently. \n'
         ann_dir = os.path.join(self.ann_root, 'trans_{}_annotations.json'.format(dset))
         self.load_data(ann_dir)
@@ -92,9 +91,9 @@ class CCT_TRANS(CCT):
 
 class CCT_CROP(BaseDataset):
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
         super(CCT_CROP, self).__init__(class_indices=class_indices, dset=dset, split=split,
-                                       transform=transform, return_index=return_index)
+                                       transform=transform)
         self.img_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_cropped')
         self.ann_root = os.path.join(rootdir, 'CCT_15', 'eccv_18_annotation_files')
         self.bbox = []
@@ -172,10 +171,7 @@ class CCT_CROP(BaseDataset):
         if self.transform is not None:
             sample = self.transform(sample)
 
-        if self.return_index:
-            return sample, label, index
-        else:
-            return sample, label
+        return sample, label
 
 
 @register_dataset_obj('CCT_CIS_CROP_S1')
@@ -183,25 +179,74 @@ class CCT_CIS_CROP_S1(CCT_CROP):
 
     name = 'CCT_CIS_CROP_S1'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
         super(CCT_CIS_CROP_S1, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                              split=split, transform=transform, return_index=return_index)
+                                              split=split, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_1.json'.format(dset))
         self.load_data(ann_dir)
         if split is not None:
             self.data_split()
 
 
+class CCT_CROP_ST2(CCT_CROP):
+
+    def __init__(self, rootdir, class_indices, dset='train', split=None,
+                 transform=None, conf_preds=None, unknown_only=False):
+        super(CCT_CROP_ST2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, split=split,
+                                           transform=transform)
+        self.conf_preds = conf_preds
+        self.unknown_only = unknown_only
+        if self.conf_preds is not None:
+            print('Confidence prediction is not NONE.\n')
+
+    def pick_unknown(self):
+        print('** PICKING UNKNOWN DATA ONLY **')
+        data = np.array(self.data)
+        labels = np.array(self.labels)
+        bbox = np.array(self.bbox)
+        conf_preds = np.array(self.conf_preds)
+        self.data = list(data[conf_preds == 0])
+        self.labels = list(labels[conf_preds == 0])
+        self.bbox = list(bbox[conf_preds == 0])
+
+    def __getitem__(self, index):
+        file_id = self.data[index]
+        label = self.labels[index]
+        bbox = self.bbox[index]
+        pil_bbox = (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
+        file_dir = os.path.join(self.img_root, file_id)
+        if not file_dir.endswith('.JPG'):
+            file_dir += '.jpg'
+
+        with open(file_dir, 'rb') as f:
+            sample = Image.open(f).convert('RGB').crop(pil_bbox)
+            sample = ImageOps.expand(sample, tuple((max(sample.size) - s) // 2 for s in list(sample.size)))
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        if self.conf_preds is not None:
+            conf_pred = self.conf_preds[index]
+            return sample, label, conf_pred
+        else:
+            return sample, label
+
+
 @register_dataset_obj('CCT_CIS_CROP_S2')
-class CCT_CIS_CROP_S2(CCT_CROP):
+class CCT_CIS_CROP_S2(CCT_CROP_ST2):
 
     name = 'CCT_CIS_CROP_S2'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None, return_index=False):
+    def __init__(self, rootdir, class_indices, dset='train', split=None,
+                 transform=None, conf_preds=None, unknown_only=False):
         super(CCT_CIS_CROP_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                              split=split, transform=transform, return_index=return_index)
+                                              split=split, transform=transform, conf_preds=conf_preds,
+                                              unknown_only=unknown_only)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_2.json'.format(dset))
         self.load_data(ann_dir)
+        if unknown_only:
+            self.pick_unknown()
         if split is not None:
             self.data_split()
+
 
