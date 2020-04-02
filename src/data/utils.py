@@ -37,7 +37,7 @@ def register_dataset_obj(name):
     return decorator
 
 
-def get_dataset(name, rootdir, class_indices, dset, transform, split):
+def get_dataset(name, rootdir, class_indices, dset, transform, split, **add_args):
 
     """
     Dataset getter
@@ -49,10 +49,11 @@ def get_dataset(name, rootdir, class_indices, dset, transform, split):
         split = None
 
     return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, split=split,
-                             transform=data_transforms[transform])
+                             transform=data_transforms[transform], **add_args)
 
 
-def load_dataset(name, class_indices, dset, transform, split, batch_size=64, rootdir='', shuffle=True, num_workers=1):
+def load_dataset(name, class_indices, dset, transform, split, batch_size=64, rootdir='',
+                 shuffle=True, num_workers=1, **add_args):
 
     """
     Dataset loader
@@ -61,7 +62,7 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
     if dset != 'train':
         shuffle = False
 
-    dataset = get_dataset(name, rootdir, class_indices, dset, transform, split=split)
+    dataset = get_dataset(name, rootdir, class_indices, dset, transform, split=split, **add_args)
 
     if len(dataset) == 0:
         return None
@@ -73,14 +74,13 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
 
 class BaseDataset(Dataset):
 
-    def __init__(self, class_indices, dset='train', split=None, transform=None, return_index=False):
+    def __init__(self, class_indices, dset='train', split=None, transform=None):
         self.img_root = None
         self.ann_root = None
         self.class_indices = class_indices
         self.dset = dset
         self.split = split
         self.transform = transform
-        self.return_index = return_index
         self.data = []
         self.labels = []
 
@@ -138,9 +138,6 @@ class BaseDataset(Dataset):
         if self.transform is not None:
             sample = self.transform(sample)
 
-        if self.return_index:
-            return sample, label, index
-        else:
-            return sample, label
+        return sample, label
 
 
