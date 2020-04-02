@@ -16,8 +16,6 @@ num_workers: 4
 model_name: PlainResNetClassifier
 num_layers: 50
 weights_init: ./weights/PlainStage1/032620_S1_CROP_spALL_0.pth
-conf_preds: ./weights/PlainStage1/032620_S1_CROP_spALL_0_conf_preds.npz
-
 
 # optim
 ## feature
