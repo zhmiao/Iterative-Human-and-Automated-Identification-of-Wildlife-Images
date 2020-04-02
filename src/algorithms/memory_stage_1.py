@@ -94,7 +94,7 @@ class MemoryStage1(PlainStage1):
         eval_info += 'False positive percentage: {:.3f} \n'.format(false_pos_percent * 100)
         eval_info += 'Selected unknown percentage: {:.3f} \n'.format(percent_unknown * 100)
 
-        return eval_info, f1, conf_preds
+        return eval_info, f1, conf_preds, np.array(total_preds)
 
     def centroids_cal(self, loader):
 
@@ -138,13 +138,17 @@ class MemoryStage1(PlainStage1):
             self.logger.info('Centroids saved to {}.\n'.format(centroids_path))
 
         # Evaluate
-        eval_info, f1, conf_preds = self.evaluate_epoch(loader)
+        eval_info, f1, conf_preds, init_pseudo = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
 
         if loader == self.testloader:
-            conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npz')
+            conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
             self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
             conf_preds.tofile(conf_preds_path)
+
+            init_pseudo_path = self.weights_path.replace('.pth', '_init_pseudo.npy')
+            self.logger.info('Saving initial pseudolabels to {}'.format(init_pseudo_path))
+            init_pseudo.tofile(init_pseudo_path)
 
         return f1
 
