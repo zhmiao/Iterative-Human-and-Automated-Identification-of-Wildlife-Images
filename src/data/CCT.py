@@ -227,7 +227,7 @@ class CCT_CROP_ST2(CCT_CROP):
 
         if self.conf_preds is not None:
             conf_pred = self.conf_preds[index]
-            return sample, label, conf_pred
+            return sample, label, conf_pred, index
         else:
             return sample, label
 

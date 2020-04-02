@@ -135,7 +135,7 @@ class PlainStage2(Algorithm):
 
         N = len(self.trainloader)
 
-        for batch_idx, (data, labels, _) in enumerate(self.trainloader):
+        for batch_idx, (data, labels, _, _) in enumerate(self.trainloader):
 
             # log basic adda train info
             info_str = '[Train plain] Epoch: {} [{}/{} ({:.2f}%)] '.format(epoch, batch_idx,
