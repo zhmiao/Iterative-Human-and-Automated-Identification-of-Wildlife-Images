@@ -12,58 +12,7 @@ from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
 
-from .plain_resnet import FineTuneResNet
-
-
-def load_data(args, conf_preds, unknown_only=False):
-
-    """
-    Dataloading function. This function can change alg by alg as well.
-    """
-
-    print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
-
-    cls_idx = class_indices[args.class_indices]
-
-    trainloader = load_dataset(name=args.dataset_name,
-                               class_indices=cls_idx,
-                               dset='train',
-                               transform='train',
-                               split=args.train_split,
-                               rootdir=args.dataset_root,
-                               batch_size=args.batch_size,
-                               shuffle=True,
-                               num_workers=args.num_workers,
-                               conf_preds=conf_preds,
-                               unknown_only=unknown_only)
-
-    # Use replace S1 to S2 for evaluation
-    testloader = load_dataset(name=args.dataset_name,
-                              class_indices=cls_idx,
-                              dset='train',
-                              transform='eval',
-                              split=None,
-                              rootdir=args.dataset_root,
-                              batch_size=args.batch_size,
-                              shuffle=False,
-                              num_workers=args.num_workers,
-                              conf_preds=None,
-                              unknown_only=False)
-
-    # Use replace S1 to S2 for evaluation
-    valloader = load_dataset(name=args.dataset_name,
-                             class_indices=cls_idx,
-                             dset='train',
-                             transform='eval',
-                             split=None,
-                             rootdir=args.dataset_root,
-                             batch_size=args.batch_size,
-                             shuffle=False,
-                             num_workers=args.num_workers,
-                             conf_preds=None,
-                             unknown_only=False)
-
-    return trainloader, testloader, valloader
+from .plain_stage_2 import load_data
 
 
 @register_algorithm('MemoryStage2')

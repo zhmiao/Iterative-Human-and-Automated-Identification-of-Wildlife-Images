@@ -40,7 +40,7 @@ def load_data(args, conf_preds, unknown_only=False):
     # Use replace S1 to S2 for evaluation
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
-                              dset='train',
+                              dset='test',
                               transform='eval',
                               split=None,
                               rootdir=args.dataset_root,
@@ -53,7 +53,7 @@ def load_data(args, conf_preds, unknown_only=False):
     # Use replace S1 to S2 for evaluation
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
-                             dset='train',
+                             dset='val',
                              transform='eval',
                              split=None,
                              rootdir=args.dataset_root,
