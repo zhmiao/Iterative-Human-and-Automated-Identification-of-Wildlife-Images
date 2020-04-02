@@ -30,7 +30,7 @@ class MemoryStage1(PlainStage1):
     def __init__(self, args):
         super(MemoryStage1, self).__init__(args=args)
 
-    def evaluate_epoch(self, loader):
+    def validate_epoch(self, loader):
 
         self.net.eval()
 
@@ -125,23 +125,24 @@ class MemoryStage1(PlainStage1):
 
     def evaluate(self, loader):
 
-        # Calculate training data centroids first
-        centroids_path = self.weights_path.replace('.pth', '_centroids.npy')
-        if os.path.exists(centroids_path):
-            self.logger.info('Loading centroids from {}.\n'.format(centroids_path))
-            cent_np = np.fromfile(centroids_path, dtype=np.float32).reshape(-1, self.net.feature_dim)
-            self.centroids = torch.from_numpy(cent_np).cuda()
-        else:
-            self.logger.info('Calculating training data centroids.\n')
-            self.centroids = self.centroids_cal(self.trainloader)
-            self.centroids.clone().detach().cpu().numpy().tofile(centroids_path)
-            self.logger.info('Centroids saved to {}.\n'.format(centroids_path))
-
-        # Evaluate
-        eval_info, f1, conf_preds, init_pseudo = self.evaluate_epoch(loader)
-        self.logger.info(eval_info)
-
         if loader == self.testloader:
+
+            # Calculate training data centroids first
+            centroids_path = self.weights_path.replace('.pth', '_centroids.npy')
+            if os.path.exists(centroids_path):
+                self.logger.info('Loading centroids from {}.\n'.format(centroids_path))
+                cent_np = np.fromfile(centroids_path, dtype=np.float32).reshape(-1, self.net.feature_dim)
+                self.centroids = torch.from_numpy(cent_np).cuda()
+            else:
+                self.logger.info('Calculating training data centroids.\n')
+                self.centroids = self.centroids_cal(self.trainloader)
+                self.centroids.clone().detach().cpu().numpy().tofile(centroids_path)
+                self.logger.info('Centroids saved to {}.\n'.format(centroids_path))
+
+            # Evaluate
+            eval_info, f1, conf_preds, init_pseudo = self.test_epoch(loader)
+            self.logger.info(eval_info)
+
             conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
             self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
             conf_preds.tofile(conf_preds_path)
@@ -150,7 +151,15 @@ class MemoryStage1(PlainStage1):
             self.logger.info('Saving initial pseudolabels to {}'.format(init_pseudo_path))
             init_pseudo.tofile(init_pseudo_path)
 
-        return f1
+            return f1
+
+        else:
+
+            eval_info, eval_acc_mac, eval_acc_mic = self.validate_epoch(loader)
+            self.logger.info(eval_info)
+            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
+
+            return eval_acc_mac
 
 
 

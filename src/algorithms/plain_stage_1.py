@@ -45,9 +45,9 @@ def load_data(args):
                               num_workers=args.num_workers)
 
     # Use replace S1 to S2 for evaluation
-    valloader = load_dataset(name=args.dataset_name.replace('S1', 'S2'),
+    valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
-                             dset='train',
+                             dset='val',
                              transform='eval',
                              split=None,
                              rootdir=args.dataset_root,
@@ -173,7 +173,7 @@ class PlainStage1(Algorithm):
 
     def train(self):
 
-        best_f1 = 0.
+        best_acc = 0.
 
         for epoch in range(self.num_epochs):
 
@@ -182,13 +182,13 @@ class PlainStage1(Algorithm):
 
             # Validation
             self.logger.info('\nValidation.')
-            val_f1 = self.evaluate(self.valloader)
-            if val_f1 > best_f1:
+            val_acc_mac = self.evaluate(self.valloader)
+            if val_acc_mac > best_acc:
                 self.net.update_best()
 
         self.save_model()
 
-    def evaluate_epoch(self, loader):
+    def test_epoch(self, loader):
 
         self.net.eval()
 
@@ -240,16 +240,73 @@ class PlainStage1(Algorithm):
 
         return eval_info, f1, conf_preds
 
+    def validate_epoch(self, loader):
+
+        self.net.eval()
+
+        # Get unique classes in the loader and corresponding counts
+        loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
+        class_correct = np.array([0. for _ in range(len(eval_class_counts))])
+
+        # Forward and record # correct predictions of each class
+        with torch.set_grad_enabled(False):
+
+            for data, labels in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data, labels = data.cuda(), labels.cuda()
+                data.require_grad = False
+                labels.require_grad = False
+
+                # forward
+                feats = self.net.feature(data)
+                logits = self.net.classifier(feats)
+
+                # compute correct
+                preds = logits.argmax(dim=1)
+                for i in range(len(preds)):
+                    pred = preds[i]
+                    label = labels[i]
+                    if pred == label:
+                        class_correct[label] += 1
+
+        # Record per class accuracies
+        class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
+        overall_acc = class_correct.sum() / eval_class_counts.sum()
+        eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+        for i in range(len(class_acc)):
+            eval_info += 'Class {} (train counts {}): {:.3f} \n'.format(i, self.train_class_counts[loader_uni_class][i],
+                                                                        class_acc[i] * 100)
+
+        # Record missing classes in evaluation sets if exist
+        missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
+        eval_info += 'Missing classes in evaluation set: '
+        for c in missing_classes:
+            eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
+
+        return eval_info, class_acc.mean(), overall_acc
+
     def evaluate(self, loader):
-        eval_info, f1, conf_preds = self.evaluate_epoch(loader)
-        self.logger.info(eval_info)
 
         if loader == self.testloader:
+
+            eval_info, f1, conf_preds = self.test_epoch(loader)
+            self.logger.info(eval_info)
+
             conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
             self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
             conf_preds.tofile(conf_preds_path)
 
-        return f1
+            return f1
+
+        else:
+
+            eval_info, eval_acc_mac, eval_acc_mic = self.validate_epoch(loader)
+            self.logger.info(eval_info)
+            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
+
+            return eval_acc_mac
+
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
