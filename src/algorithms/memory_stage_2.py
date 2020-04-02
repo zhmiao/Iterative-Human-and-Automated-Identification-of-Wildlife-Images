@@ -84,13 +84,14 @@ class MemoryStage2(Algorithm):
         # Training epochs and logging intervals
         self.num_epochs = args.num_epochs
         self.log_interval = args.log_interval
-        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
-        self.init_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'))
+        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy'), dtype=int))
+        self.init_psuedo = list(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'), dtype=int))
+        self.stage_1_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'), dtype=np.float32)
 
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader, self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=True)
+        self.trainloader, self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=False)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):
@@ -102,6 +103,14 @@ class MemoryStage2(Algorithm):
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True)
+
+        # Initial centroids
+        self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
+        stage_1_memory = self.stage_1_mem_flat.reshape(-1, self.net.feature_dim)
+        initial_centroids = self.centroids_cal(self.trainloader).clone().detach().cpu()
+        initial_centroids[:len(stage_1_memory)] = torch.from_numpy(stage_1_memory)
+
+        # TODO: here we calculate the centroids of the training data, replace known classes centorids with intial centroids
 
         ######################
         # Optimization setup #
@@ -129,6 +138,8 @@ class MemoryStage2(Algorithm):
         self.logger.info('\nLoading from {}'.format(self.weights_path))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
+
+        # TODO: for evaluation we need to recalculate centroids for all the training data or maybe we save it at the end of training
 
     def train_epoch(self, epoch):
 
@@ -244,6 +255,33 @@ class MemoryStage2(Algorithm):
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
         return eval_info, class_acc.mean(), overall_acc
+
+    def centroids_cal(self, loader):
+
+        self.net.eval()
+
+        centroids = torch.zeros(len(class_indices[self.args.class_indices]),
+                                self.net.feature_dim).cuda()
+
+        with torch.set_grad_enabled(False):
+            for data, labels, _, _ in tqdm(loader, total=len(loader)):
+                # setup data
+                data, labels = data.cuda(), labels.cuda()
+                data.require_grad = False
+                labels.require_grad = False
+                # forward
+                feats = self.net.feature(data)
+                # Add all calculated features to center tensor
+                for i in range(len(labels)):
+                    label = labels[i]
+                    centroids[label] += feats[i]
+
+        # Get data counts
+        _, loader_class_counts = loader.dataset.class_counts_cal()
+        # Average summed features with class count
+        centroids /= torch.tensor(loader_class_counts).float().unsqueeze(1).cuda()
+
+        return centroids
 
     def evaluate(self, loader):
 
