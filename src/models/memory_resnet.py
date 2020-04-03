@@ -64,7 +64,7 @@ class MemoryResNetClassifier(BaseModule):
 
         self.fc_hallucinator = nn.Linear(self.feature_dim, self.num_cls)
         self.fc_selector = nn.Linear(self.feature_dim, self.feature_dim)
-        self.cosnorm_classifier = CosNorm_Classifier(self.feature_dim, self.feature_dim)
+        self.cosnorm_classifier = CosNorm_Classifier(self.feature_dim, self.num_cls)
 
     def setup_critera(self):
         self.criterion_cls = nn.CrossEntropyLoss()
