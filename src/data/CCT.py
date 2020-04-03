@@ -199,6 +199,10 @@ class CCT_CROP_ST2(CCT_CROP):
         if self.conf_preds is not None:
             print('Confidence prediction is not NONE.\n')
 
+    def class_counts_cal_ann(self):
+        unique_labels, unique_counts = np.unique(self.labels[self.conf_preds == 0], return_counts=True)
+        return unique_labels, unique_counts
+
     def pick_unknown(self):
         print('** PICKING UNKNOWN DATA ONLY **')
         data = np.array(self.data)

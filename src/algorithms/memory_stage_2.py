@@ -99,6 +99,7 @@ class MemoryStage2(Algorithm):
         self.trainloader_no_up,\
         self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=False)
         _, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
+        _, self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
 
         self.trainloader_up = None
 
@@ -470,8 +471,10 @@ class MemoryStage2(Algorithm):
             overall_acc = class_correct.sum() / eval_class_counts.sum()
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
             for i in range(len(class_acc)):
-                eval_info += 'Class {} (train counts {}): {:.3f} \n'.format(i, self.train_class_counts[loader_uni_class][i],
-                                                                            class_acc[i] * 100)
+                eval_info += 'Class {} ('.format(i)
+                eval_info += 'train counts {}, '.format(self.train_class_counts[loader_uni_class][i])
+                eval_info += 'ann counts {}): {:.3f} \n'.format(self.train_annotation_counts[loader_uni_class][i],
+                                                                class_acc[i] * 100)
 
             # Record missing classes in evaluation sets if exist
             missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
