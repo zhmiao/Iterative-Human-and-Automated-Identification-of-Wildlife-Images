@@ -198,8 +198,6 @@ class MemoryStage2(Algorithm):
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
 
-        # TODO: for evaluation we need to recalculate centroids for all the training data or maybe we save it at the end of training
-
     def train_warm_epoch(self, epoch):
 
         self.net.feature.train()
@@ -327,7 +325,7 @@ class MemoryStage2(Algorithm):
 
             # calculate loss
             xent_loss = self.net.criterion_cls(logits, labels)
-            ctr_loss = self.net.criterion_ctr(feats.clone())
+            ctr_loss = self.net.criterion_ctr(feats.clone(), labels)
             loss = xent_loss + self.args.ctr_loss_weight * ctr_loss
 
             #############################
@@ -367,6 +365,8 @@ class MemoryStage2(Algorithm):
     def train(self):
 
         for epoch in range(self.args.hall_warm_up_epochs):
+            # Each epoch, reset training loader and sampler with corresponding pseudo labels.
+            self.reset_trainloader()
             # Training
             self.train_warm_epoch(epoch)
 
@@ -518,3 +518,4 @@ class MemoryStage2(Algorithm):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
         self.logger.info('Saving to {}'.format(self.weights_path))
         self.net.save(self.weights_path)
+
