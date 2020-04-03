@@ -103,6 +103,13 @@ class MemoryStage2(Algorithm):
 
         self.trainloader_up = None
 
+        if args.limit_steps:
+            self.logger.info('** LIMITING STEPS!!! **')
+            self.max_batch = len(self.trainloader_no_up)
+        else:
+            self.logger.info('** NOT LIMITING STEPS!!! **')
+            self.max_batch = len(self.trainloader)
+
     def reset_trainloader(self):
         self.logger.info('\nReseting training loader and sampler with pseudo labels.')
         cls_idx = class_indices[self.args.class_indices]
@@ -203,9 +210,14 @@ class MemoryStage2(Algorithm):
         self.net.feature.train()
         self.net.fc_hallucinator.train()
 
-        N = len(self.trainloader_up)
+        # N = len(self.trainloader_up)
+        N = self.max_batch
 
         for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader_up):
+
+            # TODO!!!!!
+            if batch_idx > N:
+                break
 
             # log basic adda train info
             info_str = '[Warm up training for hallucination (Stage 2)] '
@@ -263,9 +275,14 @@ class MemoryStage2(Algorithm):
         self.net.cosnorm_classifier.train()
         self.net.criterion_ctr.train()
 
-        N = len(self.trainloader_up)
+        # N = len(self.trainloader_up)
+        N = self.max_batch
 
         for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader_up):
+
+            # TODO!!!!!
+            if batch_idx > N:
+                break
 
             # log basic adda train info
             info_str = '[Memory training (Stage 2)] '

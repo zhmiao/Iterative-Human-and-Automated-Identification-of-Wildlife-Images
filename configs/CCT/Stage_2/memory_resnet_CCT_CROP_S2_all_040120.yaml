@@ -4,6 +4,7 @@ algorithm: MemoryStage2
 num_epochs: 30
 hall_warm_up_epochs: 1
 mem_warm_up_epochs: 5
+limit_steps: 0
 log_interval: 10
 
 # data
