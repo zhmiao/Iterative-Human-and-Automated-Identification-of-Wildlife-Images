@@ -31,7 +31,8 @@ def load_data(args):
                                rootdir=args.dataset_root,
                                batch_size=args.batch_size,
                                shuffle=True,
-                               num_workers=args.num_workers)
+                               num_workers=args.num_workers,
+                               sampler=None)
 
     # Use replace S1 to S2 for evaluation
     testloader = load_dataset(name=args.dataset_name.replace('S1', 'S2'),
@@ -42,7 +43,8 @@ def load_data(args):
                               rootdir=args.dataset_root,
                               batch_size=args.batch_size,
                               shuffle=False,
-                              num_workers=args.num_workers)
+                              num_workers=args.num_workers,
+                              sampler=None)
 
     # Use replace S1 to S2 for evaluation
     valloader = load_dataset(name=args.dataset_name,
@@ -53,7 +55,8 @@ def load_data(args):
                              rootdir=args.dataset_root,
                              batch_size=args.batch_size,
                              shuffle=False,
-                             num_workers=args.num_workers)
+                             num_workers=args.num_workers,
+                             sampler=None)
 
     return trainloader, testloader, valloader
 

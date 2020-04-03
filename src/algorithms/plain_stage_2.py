@@ -34,6 +34,7 @@ def load_data(args, conf_preds, unknown_only=False):
                                batch_size=args.batch_size,
                                shuffle=True,
                                num_workers=args.num_workers,
+                               sampler=None,
                                conf_preds=conf_preds,
                                unknown_only=unknown_only)
 
@@ -47,6 +48,7 @@ def load_data(args, conf_preds, unknown_only=False):
                               batch_size=args.batch_size,
                               shuffle=False,
                               num_workers=args.num_workers,
+                              sampler=None,
                               conf_preds=None,
                               unknown_only=False)
 
@@ -60,6 +62,7 @@ def load_data(args, conf_preds, unknown_only=False):
                              batch_size=args.batch_size,
                              shuffle=False,
                              num_workers=args.num_workers,
+                             sampler=None,
                              conf_preds=None,
                              unknown_only=False)
 
