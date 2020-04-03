@@ -35,8 +35,8 @@ class MemoryStage2(Algorithm):
         # Training epochs and logging intervals
         self.num_epochs = args.num_epochs
         self.log_interval = args.log_interval
-        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy'), dtype=int))
-        self.init_psuedo = list(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'), dtype=int))
+        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
+        self.init_psuedo = list(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy')).astype(int))
         self.stage_1_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'), dtype=np.float32)
 
         #######################################
