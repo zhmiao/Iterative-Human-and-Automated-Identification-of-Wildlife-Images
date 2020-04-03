@@ -60,7 +60,6 @@ class MemoryStage2(Algorithm):
         if os.path.exists(initial_centroids_path):
             self.logger.info('Loading initial centroids from {}.\n'.format(initial_centroids_path))
             initial_centroids = np.fromfile(initial_centroids_path, dtype=np.float32).reshape(-1, self.net.feature_dim)
-            initial_centroids = torch.from_numpy(initial_centroids)
         else:
             self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
             stage_1_memory = self.stage_1_mem_flat.reshape(-1, self.net.feature_dim)
@@ -234,7 +233,7 @@ class MemoryStage2(Algorithm):
 
     def train(self):
 
-        for epoch in range(self.warm_up_epochs):
+        for epoch in range(self.args.warm_up_epochs):
 
             # Training
             self.train_warm_epoch(epoch)
