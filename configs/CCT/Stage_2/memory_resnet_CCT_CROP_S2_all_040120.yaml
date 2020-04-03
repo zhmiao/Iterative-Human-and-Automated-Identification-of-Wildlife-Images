@@ -13,6 +13,7 @@ class_indices: CCT_S2
 train_split:  # Set to blank for full dataset
 batch_size: 64
 num_workers: 4
+num_samples_cls: 4
 
 # model
 model_name: MemoryResNetClassifier

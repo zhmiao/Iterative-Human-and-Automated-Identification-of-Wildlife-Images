@@ -10,9 +10,62 @@ import torch.nn.functional as F
 from .utils import register_algorithm, Algorithm, stage_1_metric
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
+from src.data.class_aware_sampler import ClassAwareSampler
 from src.models.utils import get_model
 
-from .plain_stage_2 import load_data
+
+def load_data(args, conf_preds, unknown_only=False):
+
+    """
+    Dataloading function. This function can change alg by alg as well.
+    """
+
+    print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
+
+    cls_idx = class_indices[args.class_indices]
+
+    trainloader_no_up = load_dataset(name=args.dataset_name,
+                                     class_indices=cls_idx,
+                                     dset='train',
+                                     transform='eval',
+                                     split=args.train_split,
+                                     rootdir=args.dataset_root,
+                                     batch_size=args.batch_size,
+                                     shuffle=False,
+                                     num_workers=args.num_workers,
+                                     sampler=None,
+                                     conf_preds=conf_preds,
+                                     unknown_only=unknown_only)
+
+    # Use replace S1 to S2 for evaluation
+    testloader = load_dataset(name=args.dataset_name,
+                              class_indices=cls_idx,
+                              dset='test',
+                              transform='eval',
+                              split=None,
+                              rootdir=args.dataset_root,
+                              batch_size=args.batch_size,
+                              shuffle=False,
+                              num_workers=args.num_workers,
+                              sampler=None,
+                              conf_preds=None,
+                              unknown_only=False)
+
+    # Use replace S1 to S2 for evaluation
+    valloader = load_dataset(name=args.dataset_name,
+                             class_indices=cls_idx,
+                             dset='val',
+                             transform='eval',
+                             split=None,
+                             rootdir=args.dataset_root,
+                             batch_size=args.batch_size,
+                             shuffle=False,
+                             num_workers=args.num_workers,
+                             sampler=None,
+                             conf_preds=None,
+                             unknown_only=False)
+
+    return trainloader_no_up, testloader, valloader
 
 
 @register_algorithm('MemoryStage2')
@@ -43,8 +96,29 @@ class MemoryStage2(Algorithm):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader, self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=False)
-        _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
+        self.trainloader_no_up,\
+        self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=False)
+        _, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
+
+        self.trainloader_up = None
+
+
+    def reset_trainloader(self):
+        self.logger.info('\nReseting training loader and sampler with pseudo labels.')
+        cls_idx = class_indices[self.args.class_indices]
+        sampler = ClassAwareSampler(labels=self.pseudo_labels, num_samples_cls=self.args.num_samples_cls)
+        self.trainloader_up = load_dataset(name=self.args.dataset_name,
+                                           class_indices=cls_idx,
+                                           dset='train',
+                                           transform='train',
+                                           split=None,
+                                           rootdir=self.args.dataset_root,
+                                           batch_size=self.args.batch_size,
+                                           shuffle=False,
+                                           num_workers=self.args.num_workers,
+                                           sampler=sampler,
+                                           conf_preds=self.conf_preds,
+                                           unknown_only=False)
 
     def set_train(self):
         ###########################
@@ -64,7 +138,7 @@ class MemoryStage2(Algorithm):
         else:
             self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
             stage_1_memory = self.stage_1_mem_flat.reshape(-1, self.net.feature_dim)
-            initial_centroids = self.centroids_cal(self.trainloader).clone().detach().cpu().numpy()
+            initial_centroids = self.centroids_cal(self.trainloader_no_up).clone().detach().cpu().numpy()
             initial_centroids[:len(stage_1_memory)] = stage_1_memory
             initial_centroids.tofile(initial_centroids_path)
             self.logger.info('\nInitial centroids saved to {}.'.format(initial_centroids_path))
@@ -131,9 +205,9 @@ class MemoryStage2(Algorithm):
         self.net.feature.train()
         self.net.fc_hallucinator.train()
 
-        N = len(self.trainloader)
+        N = len(self.trainloader_up)
 
-        for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader):
+        for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader_up):
 
             # log basic adda train info
             info_str = '[Warm up training for hallucination (Stage 2)] '
@@ -191,9 +265,9 @@ class MemoryStage2(Algorithm):
         self.net.cosnorm_classifier.train()
         self.net.criterion_ctr.train()
 
-        N = len(self.trainloader)
+        N = len(self.trainloader_up)
 
-        for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader):
+        for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader_up):
 
             # log basic adda train info
             info_str = '[Memory training (Stage 2)] '
@@ -300,6 +374,9 @@ class MemoryStage2(Algorithm):
 
         for epoch in range(self.num_epochs):
 
+            # Each epoch, reset training loader and sampler with corresponding pseudo labels.
+            self.reset_trainloader()
+
             # Training
             self.train_memory_epoch(epoch)
 
@@ -311,7 +388,7 @@ class MemoryStage2(Algorithm):
 
             if epoch >= self.args.mem_warm_up_epochs:
                 self.logger.info('\nGenerating new pseudo labels.')
-                self.pseudo_labels = self.evaluate_epoch(self.trainloader, pseudo_labels=True)
+                self.pseudo_labels = self.evaluate_epoch(self.trainloader_no_up, pseudo_labels=True)
 
         self.save_model()
 
@@ -329,7 +406,7 @@ class MemoryStage2(Algorithm):
 
             for batch in tqdm(loader, total=len(loader)):
 
-                if loader == self.trainloader:
+                if loader == self.trainloader_no_up:
                     data, labels, _, _ = batch
                 else:
                     data, labels = batch

@@ -53,7 +53,7 @@ def get_dataset(name, rootdir, class_indices, dset, transform, split, **add_args
 
 
 def load_dataset(name, class_indices, dset, transform, split, batch_size=64, rootdir='',
-                 shuffle=True, num_workers=1, **add_args):
+                 shuffle=True, num_workers=1, sampler=None, **add_args):
 
     """
     Dataset loader
@@ -62,12 +62,20 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
     if dset != 'train':
         shuffle = False
 
+    print('Shuffle is {}.'.format(shuffle))
+
     dataset = get_dataset(name, rootdir, class_indices, dset, transform, split=split, **add_args)
 
     if len(dataset) == 0:
         return None
 
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True)
+    if sampler is not None:
+        print("** USING SAMPLER!! **")
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
+                            num_workers=num_workers, pin_memory=True,
+                            sampler=sampler)
+    else:
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True)
 
     return loader
 
