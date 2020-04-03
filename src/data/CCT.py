@@ -204,7 +204,7 @@ class CCT_CROP_ST2(CCT_CROP):
         unique_ann, unique_ann_counts = np.unique(np.array(self.labels)[np.array(self.conf_preds) == 0],
                                                   return_counts=True)
         temp_dic = {l: c for l, c in zip(unique_ann, unique_ann_counts)}
-        ann_counts = [0 for _ in range(len(unique_labels))]
+        ann_counts = np.array([0 for _ in range(len(unique_labels))])
         for l in unique_labels:
             if l in temp_dic:
                 ann_counts[l] = temp_dic[l]
