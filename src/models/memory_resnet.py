@@ -1,5 +1,6 @@
 import os
 import copy
+import math
 from collections import OrderedDict
 import torch
 import torch.nn as nn
@@ -20,7 +21,9 @@ class MemoryResNetClassifier(BaseModule):
         self.num_cls = num_cls
         self.num_layers = num_layers
         self.feature = None
-        self.classifier = None
+        self.fc_hallucinator = None
+        self.fc_selector = None
+        self.cosnorm_classifier = None
         self.criterion_cls = None
         self.criterion_ctr = None
         self.best_weights = None
@@ -56,8 +59,12 @@ class MemoryResNetClassifier(BaseModule):
             raise Exception('ResNet Type not supported.')
 
         self.feature = ResNetFeature(block, layers, **kwargs)
-        self.classifier = nn.Linear(512 * block.expansion, self.num_cls)
+
         self.feature_dim = 512 * block.expansion
+
+        self.fc_hallucinator = nn.Linear(self.feature_dim, self.num_cls)
+        self.fc_selector = nn.Linear(self.feature_dim, self.feature_dim)
+        self.cosnorm_classifier = CosNorm_Classifier(self.feature_dim, self.feature_dim)
 
     def setup_critera(self):
         self.criterion_cls = nn.CrossEntropyLoss()
@@ -90,6 +97,27 @@ class MemoryResNetClassifier(BaseModule):
 
     def update_best(self):
         self.best_weights = copy.deepcopy(self.state_dict())
+
+
+class CosNorm_Classifier(nn.Module):
+    def __init__(self, in_dims, out_dims, scale=16, margin=0.5):
+        super(CosNorm_Classifier, self).__init__()
+        self.in_dims = in_dims
+        self.out_dims = out_dims
+        self.scale = scale
+        self.margin = margin
+        self.weight = nn.Parameter(torch.Tensor(out_dims, in_dims).cuda())
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1. / math.sqrt(self.weight.size(1))
+        self.weight.data.uniform_(-stdv, stdv)
+
+    def forward(self, input, *args):
+        norm_x = torch.norm(input.clone(), 2, 1, keepdim=True)
+        ex = (norm_x / (1 + norm_x)) * (input / norm_x)
+        ew = self.weight / torch.norm(self.weight, 2, 1, keepdim=True)
+        return torch.mm(self.scale * ex, ew.t())
 
 
 class DiscCentroidsLoss(nn.Module):
