@@ -211,19 +211,9 @@ class MemoryStage2(Algorithm):
             data.require_grad = False
             labels.require_grad = False
 
-            ########################
-            # Setup data variables #
-            ########################
-            data, labels = data.cuda(), labels.cuda()
-
-            data.require_grad = False
-            labels.require_grad = False
-
             ####################
             # Forward and loss #
             ####################
-            # TODO: OLTR procedure!!
-
             # feature
             feats = self.net.feature(data)
 
@@ -342,7 +332,38 @@ class MemoryStage2(Algorithm):
 
                 # forward
                 feats = self.net.feature(data)
-                logits = self.net.classifier(feats)
+
+                batch_size = feats.size(0)
+                feat_size = feats.size(1)
+
+                # get current centroids and detach it from graph
+                centroids = self.net.criterion_ctr.centroids.clone().detach()
+
+                # set up visual memory
+                feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
+                centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
+                keys_memory = centroids.clone()
+
+                # computing reachability
+                dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
+                values_nn, labels_nn = torch.sort(dist_cur, 1)
+                scale = 10.0
+                reachability = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
+
+                # computing memory feature by querying and associating visual memory
+                values_memory = self.fc_hallucinator(feats.clone())
+                values_memory = values_memory.softmax(dim=1)
+                memory_feature = torch.matmul(values_memory, keys_memory)
+
+                # computing concept selector
+                concept_selector = self.fc_selector(feats.clone())
+                concept_selector = concept_selector.tanh()
+
+                # computing meta embedding
+                meta_feats = reachability * (feats + concept_selector * memory_feature)
+
+                # final logits
+                logits = self.cosnorm_classifier(meta_feats)
 
                 # compute correct
                 preds = logits.argmax(dim=1)
