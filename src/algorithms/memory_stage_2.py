@@ -126,7 +126,61 @@ class MemoryStage2(Algorithm):
 
         # TODO: for evaluation we need to recalculate centroids for all the training data or maybe we save it at the end of training
 
-    def train_epoch(self, epoch):
+    def train_warm_epoch(self, epoch):
+
+        self.net.feature.train()
+        self.net.fc_hallucinator.train()
+
+        N = len(self.trainloader)
+
+        for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader):
+
+            # log basic adda train info
+            info_str = '[Warm up training for hallucination (Stage 2)] '
+            info_str += 'Epoch: {} [{}/{} ({:.2f}%)] '.format(epoch, batch_idx,
+                                                              N, 100 * batch_idx / N)
+
+            ########################
+            # Setup data variables #
+            ########################
+            data, labels = data.cuda(), labels.cuda()
+
+            data.require_grad = False
+            labels.require_grad = False
+
+            ####################
+            # Forward and loss #
+            ####################
+            # forward
+            feats = self.net.feature(data)
+            logits = self.net.classifier(feats)
+            # calculate loss
+            loss = self.net.criterion_cls(logits, labels)
+
+            #############################
+            # Backward and optimization #
+            #############################
+            # zero gradients for optimizer
+            self.opt_net.zero_grad()
+            # loss backpropagation
+            loss.backward()
+            # optimize step
+            self.opt_net.step()
+
+            ###########
+            # Logging #
+            ###########
+            if batch_idx % self.log_interval == 0:
+                # compute overall acc
+                preds = logits.argmax(dim=1)
+                acc = (preds == labels).float().mean()
+                # log update info
+                info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
+                self.logger.info(info_str)
+
+        self.scheduler.step()
+
+    def train_memory_epoch(self, epoch):
 
         self.net.train()
 
@@ -180,12 +234,21 @@ class MemoryStage2(Algorithm):
 
     def train(self):
 
+        for epoch in range(self.warm_up_epochs):
+
+            # Training
+            self.train_warm_epoch(epoch)
+
+            # Validation
+            self.logger.info('\nValidation.')
+            val_acc_mac = self.evaluate(self.valloader)
+
         best_acc = 0.
 
         for epoch in range(self.num_epochs):
 
             # Training
-            self.train_epoch(epoch)
+            self.train_memory_epoch(epoch)
 
             # Validation
             self.logger.info('\nValidation.')
