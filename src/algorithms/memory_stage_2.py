@@ -107,8 +107,7 @@ class MemoryStage2(Algorithm):
             self.logger.info('** LIMITING STEPS!!! **')
             self.max_batch = len(self.trainloader_no_up)
         else:
-            self.logger.info('** NOT LIMITING STEPS!!! **')
-            self.max_batch = len(self.trainloader)
+            self.max_batch = None
 
     def reset_trainloader(self):
         self.logger.info('\nReseting training loader and sampler with pseudo labels.')
@@ -211,11 +210,13 @@ class MemoryStage2(Algorithm):
         self.net.fc_hallucinator.train()
 
         # N = len(self.trainloader_up)
-        N = self.max_batch
+        if self.max_batch is not None:
+            N = self.max_batch
+        else:
+            N = len(self.trainloader_up)
 
         for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader_up):
 
-            # TODO!!!!!
             if batch_idx > N:
                 break
 
@@ -276,11 +277,13 @@ class MemoryStage2(Algorithm):
         self.net.criterion_ctr.train()
 
         # N = len(self.trainloader_up)
-        N = self.max_batch
+        if self.max_batch is not None:
+            N = self.max_batch
+        else:
+            N = len(self.trainloader_up)
 
         for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader_up):
 
-            # TODO!!!!!
             if batch_idx > N:
                 break
 
