@@ -155,7 +155,8 @@ class MemoryStage2(Algorithm):
             ####################
             # forward
             feats = self.net.feature(data)
-            logits = self.net.classifier(feats)
+            logits = self.net.fc_hallucinator(feats)
+
             # calculate loss
             loss = self.net.criterion_cls(logits, labels)
 
@@ -163,11 +164,13 @@ class MemoryStage2(Algorithm):
             # Backward and optimization #
             #############################
             # zero gradients for optimizer
-            self.opt_net.zero_grad()
+            self.opt_feats.zero_grad()
+            self.opt_fc_hall.zero_grad()
             # loss backpropagation
             loss.backward()
             # optimize step
-            self.opt_net.step()
+            self.opt_feats.step()
+            self.opt_fc_hall.step()
 
             ###########
             # Logging #
@@ -179,8 +182,6 @@ class MemoryStage2(Algorithm):
                 # log update info
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
                 self.logger.info(info_str)
-
-        self.scheduler.step()
 
     def train_memory_epoch(self, epoch):
 
@@ -237,13 +238,8 @@ class MemoryStage2(Algorithm):
     def train(self):
 
         for epoch in range(self.args.warm_up_epochs):
-
             # Training
             self.train_warm_epoch(epoch)
-
-            # Validation
-            self.logger.info('\nValidation.')
-            val_acc_mac = self.evaluate(self.valloader)
 
         best_acc = 0.
 
