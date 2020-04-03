@@ -47,8 +47,8 @@ class MemoryStage1(PlainStage1):
 
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
-                data.require_grad = False
-                labels.require_grad = False
+                data.requires_grad = False
+                labels.requires_grad = False
 
                 # forward
                 feats = self.net.feature(data)
@@ -107,8 +107,8 @@ class MemoryStage1(PlainStage1):
             for data, labels in tqdm(loader, total=len(loader)):
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
-                data.require_grad = False
-                labels.require_grad = False
+                data.requires_grad = False
+                labels.requires_grad = False
                 # forward
                 feats = self.net.feature(data)
                 # Add all calculated features to center tensor

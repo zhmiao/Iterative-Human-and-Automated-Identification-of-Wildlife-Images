@@ -131,8 +131,8 @@ class PlainResNet(Algorithm):
             ########################
             data, labels = data.cuda(), labels.cuda()
 
-            data.require_grad = False
-            labels.require_grad = False
+            data.requires_grad = False
+            labels.requires_grad = False
 
             ####################
             # Forward and loss #
@@ -198,8 +198,8 @@ class PlainResNet(Algorithm):
 
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
-                data.require_grad = False
-                labels.require_grad = False
+                data.requires_grad = False
+                labels.requires_grad = False
 
                 # forward
                 feats = self.net.feature(data)
