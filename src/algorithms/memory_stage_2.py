@@ -36,8 +36,9 @@ class MemoryStage2(Algorithm):
         self.num_epochs = args.num_epochs
         self.log_interval = args.log_interval
         self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
-        self.init_psuedo = list(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy')).astype(int))
         self.stage_1_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'), dtype=np.float32)
+        self.init_psuedo = torch.from_numpy(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'),
+                                                        dtype=np.int))
 
         #######################################
         # Setup data for training and testing #
@@ -142,8 +143,10 @@ class MemoryStage2(Algorithm):
             ########################
             # Setup data variables #
             ########################
+            # assign psuedo labels using initial psuedo labels
+            labels[confs == 1] = self.init_psuedo[indices][confs == 1]
+            # assign devices
             data, labels = data.cuda(), labels.cuda()
-
             data.require_grad = False
             labels.require_grad = False
 
