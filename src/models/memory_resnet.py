@@ -32,15 +32,15 @@ class MemoryResNetClassifier(BaseModule):
         # Model setup and weights initialization
         self.setup_net()
 
+        # Criteria setup
+        self.setup_critera()
+
         if weights_init == 'ImageNet':
             self.load(model_urls['resnet{}'.format(num_layers)], feat_only=init_feat_only)
         elif os.path.exists(weights_init):
             self.load(weights_init, feat_only=init_feat_only)
         elif weights_init != 'ImageNet' and not os.path.exists(weights_init):
             raise NameError('Initial weights not exists {}.'.format(weights_init))
-
-        # Criteria setup
-        self.setup_critera()
 
     def setup_net(self):
 
