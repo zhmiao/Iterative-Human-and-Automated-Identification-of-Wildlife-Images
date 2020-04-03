@@ -185,15 +185,31 @@ class MemoryStage2(Algorithm):
 
     def train_memory_epoch(self, epoch):
 
-        self.net.train()
+        self.net.feature.train()
+        self.net.fc_hallucinator.train()
+        self.net.fc_selector.train()
+        self.net.cosnorm_classifier.train()
+        self.net.criterion_ctr.train()
 
         N = len(self.trainloader)
 
-        for batch_idx, (data, labels, _) in enumerate(self.trainloader):
+        for batch_idx, (data, labels, confs, indices) in enumerate(self.trainloader):
 
             # log basic adda train info
-            info_str = '[Train plain] Epoch: {} [{}/{} ({:.2f}%)] '.format(epoch, batch_idx,
-                                                                           N, 100 * batch_idx / N)
+            info_str = '[Memory training (Stage 2)] '
+            info_str += 'Epoch: {} [{}/{} ({:.2f}%)] '.format(epoch, batch_idx,
+                                                              N, 100 * batch_idx / N)
+
+            ########################
+            # Setup data variables #
+            ########################
+            if epoch <= self.args.mem_warm_up_epochs:
+                # assign psuedo labels using initial psuedo labels
+                labels[confs == 1] = self.init_psuedo[indices][confs == 1]
+            # assign devices
+            data, labels = data.cuda(), labels.cuda()
+            data.require_grad = False
+            labels.require_grad = False
 
             ########################
             # Setup data variables #
@@ -206,38 +222,88 @@ class MemoryStage2(Algorithm):
             ####################
             # Forward and loss #
             ####################
-            # forward
+            # TODO: OLTR procedure!!
+
+            # feature
             feats = self.net.feature(data)
-            logits = self.net.classifier(feats)
+
+            batch_size = feats.size(0)
+            feat_size = feats.size(1)
+
+            # get current centroids and detach it from graph
+            centroids = self.net.criterion_ctr.centroids.clone().detach()
+
+            # set up visual memory
+            feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
+            centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
+            keys_memory = centroids.clone()
+
+            # computing reachability
+            dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
+            values_nn, labels_nn = torch.sort(dist_cur, 1)
+            scale = 10.0
+            reachability = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
+
+            # computing memory feature by querying and associating visual memory
+            values_memory = self.fc_hallucinator(feats.clone())
+            values_memory = values_memory.softmax(dim=1)
+            memory_feature = torch.matmul(values_memory, keys_memory)
+
+            # computing concept selector
+            concept_selector = self.fc_selector(feats.clone())
+            concept_selector = concept_selector.tanh()
+
+            # computing meta embedding
+            meta_feats = reachability * (feats + concept_selector * memory_feature)
+
+            # final logits
+            logits = self.cosnorm_classifier(meta_feats)
+
+            # TODO: After warming up, use new psuedo labels!!
+            preds = logits.argmax(dim=1)
+
             # calculate loss
-            loss = self.net.criterion_cls(logits, labels)
+            xent_loss = self.net.criterion_cls(logits, labels)
+            ctr_loss = self.net.criterion_ctr(feats.clone())
+            loss = xent_loss + self.args.ctr_loss_weight * ctr_loss
 
             #############################
             # Backward and optimization #
             #############################
             # zero gradients for optimizer
-            self.opt_net.zero_grad()
+            self.opt_feats.zero_grad()
+            self.opt_fc_hall.zero_grad()
+            self.opt_fc_sel.zero_grad()
+            self.opt_cos_clf.zero_grad()
+            self.opt_mem.zero_grad()
             # loss backpropagation
             loss.backward()
             # optimize step
-            self.opt_net.step()
+            self.opt_feats.step()
+            self.opt_fc_hall.step()
+            self.opt_fc_sel.step()
+            self.opt_cos_clf.step()
+            self.opt_mem.step()
 
             ###########
             # Logging #
             ###########
             if batch_idx % self.log_interval == 0:
                 # compute overall acc
-                preds = logits.argmax(dim=1)
                 acc = (preds == labels).float().mean()
                 # log update info
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
                 self.logger.info(info_str)
 
-        self.scheduler.step()
+        self.sch_feats.step()
+        self.sch_fc_hall.step()
+        self.sch_fc_sel.step()
+        self.sch_cos_clf.step()
+        self.sch_mem.step()
 
     def train(self):
 
-        for epoch in range(self.args.warm_up_epochs):
+        for epoch in range(self.args.hall_warm_up_epochs):
             # Training
             self.train_warm_epoch(epoch)
 
