@@ -99,10 +99,9 @@ class MemoryStage2(Algorithm):
         self.trainloader_no_up,\
         self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=False)
         _, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
-        _, self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
+        self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
 
         self.trainloader_up = None
-
 
     def reset_trainloader(self):
         self.logger.info('\nReseting training loader and sampler with pseudo labels.')
