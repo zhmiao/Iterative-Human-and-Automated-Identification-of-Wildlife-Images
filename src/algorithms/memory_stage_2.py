@@ -76,29 +76,44 @@ class MemoryStage2(Algorithm):
                     print('\nPopulating initial centroids.\n')
                     param.copy_(torch.from_numpy(initial_centroids))
 
-        # TODO: here we calculate the centroids of the training data, replace known classes centorids with intial centroids
-
         ######################
         # Optimization setup #
         ######################
-        # Setup optimizer parameters for each network component
-        net_optim_params_list = [
-            {'params': self.net.feature.parameters(),
-             'lr': self.args.lr_feature,
-             'momentum': self.args.momentum_feature,
-             'weight_decay': self.args.weight_decay_feature},
-            {'params': self.net.classifier.parameters(),
-             'lr': self.args.lr_classifier,
-             'momentum': self.args.momentum_classifier,
-             'weight_decay': self.args.weight_decay_classifier},
-            {'params': self.net.criterion_ctr.parameters(),
-             'lr': self.args.lr_memory,
-             'momentum': self.args.momentum_memory,
-             'weight_decay': self.args.weight_decay_memory}
-        ]
         # Setup optimizer and optimizer scheduler
-        self.opt_net = optim.SGD(net_optim_params_list)
-        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
+        self.opt_feats = optim.SGD([{'params': self.net.feature.parameters(),
+                                     'lr': self.args.lr_feature,
+                                     'momentum': self.args.momentum_feature,
+                                     'weight_decay': self.args.weight_decay_feature}])
+        self.sch_feats = optim.lr_scheduler.StepLR(self.opt_feats, step_size=self.args.step_size,
+                                                   gamma=self.args.gamma)
+
+        self.opt_fc_hall = optim.SGD([{'params': self.net.fc_hallucinator.parameters(),
+                                       'lr': self.args.lr_classifier,
+                                       'momentum': self.args.momentum_classifier,
+                                       'weight_decay': self.args.weight_decay_classifier}])
+        self.sch_fc_hall = optim.lr_scheduler.StepLR(self.opt_fc_hall, step_size=self.args.step_size,
+                                                     gamma=self.args.gamma)
+
+        self.opt_fc_sel = optim.SGD([{'params': self.net.fc_selector.parameters(),
+                                      'lr': self.args.lr_classifier,
+                                      'momentum': self.args.momentum_classifier,
+                                      'weight_decay': self.args.weight_decay_classifier}])
+        self.sch_fc_sel = optim.lr_scheduler.StepLR(self.opt_fc_sel, step_size=self.args.step_size,
+                                                    gamma=self.args.gamma)
+
+        self.opt_cos_clf = optim.SGD([{'params': self.net.cosnorm_classifier.parameters(),
+                                       'lr': self.args.lr_classifier,
+                                       'momentum': self.args.momentum_classifier,
+                                       'weight_decay': self.args.weight_decay_classifier}])
+        self.sch_cos_clf = optim.lr_scheduler.StepLR(self.opt_cos_clf, step_size=self.args.step_size,
+                                                     gamma=self.args.gamma)
+
+        self.opt_mem = optim.SGD([{'params': self.net.criterion_ctr.parameters(),
+                                   'lr': self.args.lr_classifier,
+                                   'momentum': self.args.momentum_classifier,
+                                   'weight_decay': self.args.weight_decay_classifier}])
+        self.sch_mem = optim.lr_scheduler.StepLR(self.opt_mem, step_size=self.args.step_size,
+                                                 gamma=self.args.gamma)
 
     def set_eval(self):
         ###############################
