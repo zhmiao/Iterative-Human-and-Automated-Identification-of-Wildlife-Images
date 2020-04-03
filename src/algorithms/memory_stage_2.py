@@ -37,8 +37,8 @@ class MemoryStage2(Algorithm):
         self.log_interval = args.log_interval
         self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
         self.stage_1_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'), dtype=np.float32)
-        self.init_psuedo = torch.from_numpy(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'),
-                                                        dtype=np.int))
+        self.pseudo_labels = torch.from_numpy(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'),
+                                                          dtype=np.int))
 
         #######################################
         # Setup data for training and testing #
@@ -143,12 +143,12 @@ class MemoryStage2(Algorithm):
             ########################
             # Setup data variables #
             ########################
-            # assign psuedo labels using initial psuedo labels
-            labels[confs == 1] = self.init_psuedo[indices][confs == 1]
+            # assign pseudo labels using initial pseudo labels
+            labels[confs == 1] = self.pseudo_labels[indices][confs == 1]
             # assign devices
             data, labels = data.cuda(), labels.cuda()
-            data.require_grad = False
-            labels.require_grad = False
+            data.requires_grad = False
+            labels.requires_grad = False
 
             ####################
             # Forward and loss #
@@ -203,13 +203,12 @@ class MemoryStage2(Algorithm):
             ########################
             # Setup data variables #
             ########################
-            if epoch <= self.args.mem_warm_up_epochs:
-                # assign psuedo labels using initial psuedo labels
-                labels[confs == 1] = self.init_psuedo[indices][confs == 1]
+            # assign pseudo labels
+            labels[confs == 1] = self.pseudo_labels[indices][confs == 1]
             # assign devices
             data, labels = data.cuda(), labels.cuda()
-            data.require_grad = False
-            labels.require_grad = False
+            data.requires_grad = False
+            labels.requires_grad = False
 
             ####################
             # Forward and loss #
@@ -222,6 +221,7 @@ class MemoryStage2(Algorithm):
 
             # get current centroids and detach it from graph
             centroids = self.net.criterion_ctr.centroids.clone().detach()
+            centroids.requires_grad = False
 
             # set up visual memory
             feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
@@ -235,21 +235,20 @@ class MemoryStage2(Algorithm):
             reachability = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
 
             # computing memory feature by querying and associating visual memory
-            values_memory = self.fc_hallucinator(feats.clone())
+            values_memory = self.net.fc_hallucinator(feats.clone())
             values_memory = values_memory.softmax(dim=1)
             memory_feature = torch.matmul(values_memory, keys_memory)
 
             # computing concept selector
-            concept_selector = self.fc_selector(feats.clone())
+            concept_selector = self.net.fc_selector(feats.clone())
             concept_selector = concept_selector.tanh()
 
             # computing meta embedding
             meta_feats = reachability * (feats + concept_selector * memory_feature)
 
             # final logits
-            logits = self.cosnorm_classifier(meta_feats)
+            logits = self.net.cosnorm_classifier(meta_feats)
 
-            # TODO: After warming up, use new psuedo labels!!
             preds = logits.argmax(dim=1)
 
             # calculate loss
@@ -310,25 +309,35 @@ class MemoryStage2(Algorithm):
             if val_acc_mac > best_acc:
                 self.net.update_best()
 
+            if epoch >= self.args.mem_warm_up_epochs:
+                self.logger.info('\nGenerating new pseudo labels.')
+                self.pseudo_labels = self.evaluate_epoch(self.trainloader, pseudo_labels=True)
+
         self.save_model()
 
-    def evaluate_epoch(self, loader):
+    def evaluate_epoch(self, loader, pseudo_labels=False):
 
         self.net.eval()
 
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
         class_correct = np.array([0. for _ in range(len(eval_class_counts))])
+        total_preds = []
 
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
 
-            for data, labels in tqdm(loader, total=len(loader)):
+            for batch in tqdm(loader, total=len(loader)):
+
+                if loader == self.trainloader:
+                    data, labels, _, _ = batch
+                else:
+                    data, labels = batch
 
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
-                data.require_grad = False
-                labels.require_grad = False
+                data.requires_grad = False
+                labels.requires_grad = False
 
                 # forward
                 feats = self.net.feature(data)
@@ -338,6 +347,7 @@ class MemoryStage2(Algorithm):
 
                 # get current centroids and detach it from graph
                 centroids = self.net.criterion_ctr.centroids.clone().detach()
+                centroids.requires_grad = False
 
                 # set up visual memory
                 feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
@@ -351,19 +361,19 @@ class MemoryStage2(Algorithm):
                 reachability = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
 
                 # computing memory feature by querying and associating visual memory
-                values_memory = self.fc_hallucinator(feats.clone())
+                values_memory = self.net.fc_hallucinator(feats.clone())
                 values_memory = values_memory.softmax(dim=1)
                 memory_feature = torch.matmul(values_memory, keys_memory)
 
                 # computing concept selector
-                concept_selector = self.fc_selector(feats.clone())
+                concept_selector = self.net.fc_selector(feats.clone())
                 concept_selector = concept_selector.tanh()
 
                 # computing meta embedding
                 meta_feats = reachability * (feats + concept_selector * memory_feature)
 
                 # final logits
-                logits = self.cosnorm_classifier(meta_feats)
+                logits = self.net.cosnorm_classifier(meta_feats)
 
                 # compute correct
                 preds = logits.argmax(dim=1)
@@ -373,21 +383,26 @@ class MemoryStage2(Algorithm):
                     if pred == label:
                         class_correct[label] += 1
 
-        # Record per class accuracies
-        class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
-        overall_acc = class_correct.sum() / eval_class_counts.sum()
-        eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
-        for i in range(len(class_acc)):
-            eval_info += 'Class {} (train counts {}): {:.3f} \n'.format(i, self.train_class_counts[loader_uni_class][i],
-                                                                        class_acc[i] * 100)
+                total_preds.append(preds.detach().cpu())
 
-        # Record missing classes in evaluation sets if exist
-        missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
-        eval_info += 'Missing classes in evaluation set: '
-        for c in missing_classes:
-            eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
+        if pseudo_labels:
+            return torch.cat(total_preds, dim=0)
+        else:
+            # Record per class accuracies
+            class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
+            overall_acc = class_correct.sum() / eval_class_counts.sum()
+            eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+            for i in range(len(class_acc)):
+                eval_info += 'Class {} (train counts {}): {:.3f} \n'.format(i, self.train_class_counts[loader_uni_class][i],
+                                                                            class_acc[i] * 100)
 
-        return eval_info, class_acc.mean(), overall_acc
+            # Record missing classes in evaluation sets if exist
+            missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
+            eval_info += 'Missing classes in evaluation set: '
+            for c in missing_classes:
+                eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
+
+            return eval_info, class_acc.mean(), overall_acc
 
     def centroids_cal(self, loader):
 
@@ -400,8 +415,8 @@ class MemoryStage2(Algorithm):
             for data, labels, _, _ in tqdm(loader, total=len(loader)):
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
-                data.require_grad = False
-                labels.require_grad = False
+                data.requires_grad = False
+                labels.requires_grad = False
                 # forward
                 feats = self.net.feature(data)
                 # Add all calculated features to center tensor
@@ -417,11 +432,9 @@ class MemoryStage2(Algorithm):
         return centroids
 
     def evaluate(self, loader):
-
         eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
         self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
-
         return eval_acc_mac
 
     def save_model(self):
