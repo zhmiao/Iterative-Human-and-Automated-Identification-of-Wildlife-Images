@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 
 from .utils import register_algorithm, Algorithm, stage_2_metric
 from src.data.utils import load_dataset
