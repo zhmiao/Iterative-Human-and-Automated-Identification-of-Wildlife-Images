@@ -213,7 +213,8 @@ class PlainResNet(Algorithm):
                 logits = self.net.classifier(feats)
 
                 # compute correct
-                preds = logits.argmax(dim=1)
+                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
+
                 for i in range(len(preds)):
                     pred = preds[i]
                     label = labels[i]
@@ -234,7 +235,7 @@ class PlainResNet(Algorithm):
         # Record per class accuracies
         class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
         overall_acc = class_correct.sum() / eval_class_counts.sum()
-        
+
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
         for i in range(len(class_acc)):
