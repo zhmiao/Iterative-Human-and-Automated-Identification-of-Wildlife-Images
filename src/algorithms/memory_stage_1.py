@@ -30,7 +30,7 @@ class MemoryStage1(PlainStage1):
     def __init__(self, args):
         super(MemoryStage1, self).__init__(args=args)
 
-    def validate_epoch(self, loader):
+    def test_epoch(self, loader):
 
         self.net.eval()
 
