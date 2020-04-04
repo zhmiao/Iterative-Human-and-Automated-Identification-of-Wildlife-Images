@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_1_metric
+from .utils import register_algorithm, Algorithm, stage_2_metric
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
@@ -209,6 +209,10 @@ class PlainStage2(Algorithm):
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
         class_correct = np.array([0. for _ in range(len(eval_class_counts))])
 
+        total_preds = []
+        total_max_probs = []
+        total_labels = []
+
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
 
@@ -224,20 +228,39 @@ class PlainStage2(Algorithm):
                 logits = self.net.classifier(feats)
 
                 # compute correct
-                preds = logits.argmax(dim=1)
+                # preds = logits.argmax(dim=1)
+
+                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
+
                 for i in range(len(preds)):
                     pred = preds[i]
                     label = labels[i]
                     if pred == label:
                         class_correct[label] += 1
 
+                total_preds.append(preds.detach().cpu().numpy())
+                total_max_probs.append(max_probs.detach().cpu().numpy())
+                total_labels.append(labels.detach().cpu().numpy())
+
+        class_wrong_percent_unconfident,\
+        class_correct_percent_unconfident,\
+        class_acc_confident = stage_2_metric(np.concatenate(total_preds, axis=0),
+                                             np.concatenate(total_max_probs, axis=0),
+                                             np.concatenate(total_labels, axis=0),
+                                             self.args.theta)
+
         # Record per class accuracies
         class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
         overall_acc = class_correct.sum() / eval_class_counts.sum()
+
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+
         for i in range(len(class_acc)):
-            eval_info += 'Class {} (train counts {}): {:.3f} \n'.format(i, self.train_class_counts[loader_uni_class][i],
-                                                                        class_acc[i] * 100)
+            eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
+            eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
+            eval_info += 'Wrong % in unconfident {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
+            eval_info += 'Correct % in unconfident {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
+            eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
 
         # Record missing classes in evaluation sets if exist
         missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
