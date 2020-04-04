@@ -30,3 +30,6 @@ weight_decay_classifier: 0.0005
 step_size: 10
 gamma: 0.1
 
+# confidence
+theta: 0.9
+
