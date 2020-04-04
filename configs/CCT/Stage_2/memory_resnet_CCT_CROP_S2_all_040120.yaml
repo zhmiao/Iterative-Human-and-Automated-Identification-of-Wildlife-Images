@@ -42,5 +42,5 @@ gamma: 0.1
 ctr_loss_weight: 0.01
 
 # confidence
-theta: 0.9
+theta: 0.8
 
