@@ -76,7 +76,7 @@ def f_measure(preds, labels):
     return 2 * ((precision * recall) / (precision + recall + 1e-12))
 
 
-def confident_metrics(preds, labels, unique_classes, class_counts):
+def confident_metrics(preds, labels, class_counts):
     # Confident metrics
     class_correct_confident = np.array([0. for _ in range(len(np.unique(labels)) - 1)])
     class_select_confident = np.array([0. for _ in range(len(np.unique(labels)) - 1)])
@@ -107,6 +107,26 @@ def confident_metrics(preds, labels, unique_classes, class_counts):
     return class_acc_confident, class_percent_confident, false_pos_percent
 
 
+def unconfident_metrics(preds, labels):
+
+    num_cls = len(np.unique(labels)) - 1
+
+    class_unconf_wrong = np.array([0. for _ in range(num_cls)])
+    class_wrong = np.array([1e-7 for _ in range(num_cls)])
+
+    for i in range(len(preds)):
+
+        pred = preds[i]
+        label = labels[i]
+
+        if pred != label and label != -1:
+            class_wrong[label] += 1
+            if pred == -1:
+                class_unconf_wrong[label] += 1
+
+    return class_unconf_wrong / class_wrong
+
+
 def unknown_metrics(preds, labels):
     # Unknown metrics
     correct_unknown = 0.
@@ -132,13 +152,16 @@ def stage_1_metric(preds, labels, unique_classes, class_counts):
     # f1
     f1 = f_measure(preds, labels)
     # Confident
-    class_acc_confident, class_percent_confident, false_pos_percent = confident_metrics(preds, labels, unique_classes, class_counts)
+    class_acc_confident, class_percent_confident, false_pos_percent = confident_metrics(preds, labels, class_counts)
+    # Unconfident
+    class_wrong_unconfident = unconfident_metrics(preds, labels)
     # Open
     percent_unknown = unknown_metrics(preds, labels)
     # Confident indices
     conf_preds = np.zeros(len(preds))
     conf_preds[preds != -1] = 1
-    return f1, class_acc_confident, class_percent_confident, false_pos_percent, percent_unknown, conf_preds
+    return f1, class_acc_confident, class_percent_confident, false_pos_percent,\
+           class_wrong_unconfident, percent_unknown, conf_preds
 
 
 def stage_2_metric(preds, max_probs, labels, theta):
@@ -147,15 +170,16 @@ def stage_2_metric(preds, max_probs, labels, theta):
 
     class_unconf_wrong = np.array([0. for _ in range(num_cls)])
     class_unconf_correct = np.array([0. for _ in range(num_cls)])
+    class_conf_correct = np.array([0. for _ in range(num_cls)])
+
     class_wrong = np.array([1e-7 for _ in range(num_cls)])
     class_correct = np.array([1e-7 for _ in range(num_cls)])
-
-    class_conf_correct = np.array([1e-7 for _ in range(num_cls)])
     class_conf = np.array([1e-7 for _ in range(num_cls)])
 
     # Confident indices
     conf_preds = np.zeros(len(preds))
     conf_preds[max_probs > theta] = 1
+    total_unconf = (conf_preds == 0).sum()
 
     for i in range(len(preds)):
 
@@ -177,4 +201,7 @@ def stage_2_metric(preds, max_probs, labels, theta):
             else:
                 class_conf[label] += 1
 
-    return class_unconf_wrong / class_wrong, class_unconf_correct / class_correct, class_conf_correct / class_conf
+    return class_unconf_wrong / class_wrong,\
+           class_unconf_correct / class_correct,\
+           class_conf_correct / class_conf,\
+           total_unconf

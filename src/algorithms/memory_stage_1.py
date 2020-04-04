@@ -77,17 +77,19 @@ class MemoryStage1(PlainStage1):
                 total_labels.append(labels.detach().cpu().numpy())
 
         f1,\
-        class_acc_confident, class_percent_confident, false_pos_percent,\
-        percent_unknown , conf_preds = stage_1_metric(np.concatenate(total_preds, axis=0),
-                                                      np.concatenate(total_labels, axis=0),
-                                                      loader_uni_class,
-                                                      eval_class_counts)
+        class_acc_confident, class_percent_confident, false_pos_percent, \
+        class_percent_wrong_unconfident, \
+        percent_unknown, conf_preds = stage_1_metric(np.concatenate(total_preds, axis=0),
+                                                     np.concatenate(total_labels, axis=0),
+                                                     loader_uni_class,
+                                                     eval_class_counts)
 
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
         for i in range(len(class_acc_confident)):
             eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
             eval_info += 'Confident percentage: {:.2f};'.format(class_percent_confident[i] * 100)
+            eval_info += 'Unconfident wrong %: {:.2f};'.format(class_percent_confident[i] * 100)
             eval_info += 'Accuracy: {:.3f} \n'.format(class_acc_confident[i] * 100)
 
         eval_info += 'Overall F1: {:.3f} \n'.format(f1)
