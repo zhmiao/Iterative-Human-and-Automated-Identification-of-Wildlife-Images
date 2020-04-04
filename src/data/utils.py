@@ -8,18 +8,15 @@ from torchvision import transforms
 # Standard data transform with resize and typical augmentation
 data_transforms = {
     'train': transforms.Compose([
-        transforms.RandomResizedCrop(224),
+        # transforms.RandomResizedCrop(224, scale=(0.5, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
+        transforms.RandomResizedCrop(224, scale=(0.08, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
-    'val': transforms.Compose([
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-    'test': transforms.Compose([
+    'eval': transforms.Compose([
+        transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -40,7 +37,7 @@ def register_dataset_obj(name):
     return decorator
 
 
-def get_dataset(name, rootdir, class_indices, dset, split):
+def get_dataset(name, rootdir, class_indices, dset, transform, split, **add_args):
 
     """
     Dataset getter
@@ -52,10 +49,11 @@ def get_dataset(name, rootdir, class_indices, dset, split):
         split = None
 
     return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, split=split,
-                             transform=data_transforms[dset])
+                             transform=data_transforms[transform], **add_args)
 
 
-def load_dataset(name, class_indices, dset, split, batch_size=64, rootdir='', shuffle=True, num_workers=1):
+def load_dataset(name, class_indices, dset, transform, split, batch_size=64, rootdir='',
+                 shuffle=True, num_workers=1, sampler=None, **add_args):
 
     """
     Dataset loader
@@ -64,12 +62,20 @@ def load_dataset(name, class_indices, dset, split, batch_size=64, rootdir='', sh
     if dset != 'train':
         shuffle = False
 
-    dataset = get_dataset(name, rootdir, class_indices, dset, split=split)
+    print('Shuffle is {}.'.format(shuffle))
+
+    dataset = get_dataset(name, rootdir, class_indices, dset, transform, split=split, **add_args)
 
     if len(dataset) == 0:
         return None
 
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True)
+    if sampler is not None:
+        print("** USING SAMPLER!! **")
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
+                            num_workers=num_workers, pin_memory=True,
+                            sampler=sampler)
+    else:
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True)
 
     return loader
 
@@ -90,11 +96,8 @@ class BaseDataset(Dataset):
         pass
 
     def class_counts_cal(self):
-        label_counts = np.array([0 for _ in range(len(self.class_indices))])
         unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
-        for i in range(len(unique_labels)):
-            label_counts[unique_labels[i]] = unique_counts[i]
-        return unique_labels, label_counts
+        return unique_labels, unique_counts
 
     def data_split(self):
         print('Splitting data to {} samples each class maximum.'.format(self.split))

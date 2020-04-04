@@ -1,0 +1,32 @@
+# training
+conf_id: 031020_FT_S2_CROP_sp100
+algorithm: FineTuneResNet
+num_epochs: 30
+log_interval: 10
+
+# data
+dataset_root: /home/zhmiao/datasets/ecology
+dataset_name: CCT_CIS_CROP_S2
+class_indices: CCT_S2
+train_split: 100 # Set to blank for full dataset
+batch_size: 64
+num_workers: 4
+
+# model
+model_name: PlainResNetClassifier
+num_layers: 50
+weights_init: ./weights/PlainResNet/031020_S1_CROP_spALL_0.pth
+
+# optim
+## feature
+lr_feature: 0.0001
+momentum_feature: 0.9
+weight_decay_feature: 0.0005
+## classifier
+lr_classifier: 0.001
+momentum_classifier: 0.9
+weight_decay_classifier: 0.0005
+## lr_scheduler
+step_size: 10
+gamma: 0.1
+

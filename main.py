@@ -14,7 +14,7 @@ parser.add_argument('--config', default='./configs/plain_resnet_041119.yaml',
                     help='Configuration path.')
 parser.add_argument('--session', default=0,
                     help='Session id.')
-parser.add_argument('--gpu', default='0',
+parser.add_argument('--gpu', default=0,
                     help='GPU id.')
 parser.add_argument('--np_threads', default=4,
                     help='Num of threads of numpy.')
@@ -38,7 +38,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = str(args.np_threads)
 # Load configurations to args #
 ###############################
 with open(args.config) as f:
-    config = yaml.load(f)
+    config = yaml.load(f, Loader=yaml.FullLoader)
 for k, v in config.items():
     setattr(args, k, v)
 
@@ -60,10 +60,11 @@ setattr(args, 'logger', logger)
 ##############
 alg = get_algorithm(args.algorithm, args)
 if not args.evaluate:
+    alg.set_train()
     alg.logger.info('\nTraining...')
     alg.train()
 else:
-    alg.load_model()
+    alg.set_eval()
     alg.logger.info('\nTesting...')
     _ = alg.evaluate(loader=alg.testloader)
 

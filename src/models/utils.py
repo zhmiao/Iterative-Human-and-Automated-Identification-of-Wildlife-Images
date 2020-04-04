@@ -48,9 +48,6 @@ class BaseModule(nn.Module):
     def load(self, init_path):
         pass
 
-    def load_features(self, init_path):
-        pass
-
     def save(self, out_path):
         pass
 

@@ -12,8 +12,10 @@ from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
 
+from .plain_resnet import FineTuneResNet
 
-def load_data(args):
+
+def load_data(args, conf_preds, unknown_only=False):
 
     """
     Dataloading function. This function can change alg by alg as well.
@@ -21,8 +23,10 @@ def load_data(args):
 
     print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
 
+    cls_idx = class_indices[args.class_indices]
+
     trainloader = load_dataset(name=args.dataset_name,
-                               class_indices=class_indices[args.class_indices],
+                               class_indices=cls_idx,
                                dset='train',
                                transform='train',
                                split=args.train_split,
@@ -30,10 +34,13 @@ def load_data(args):
                                batch_size=args.batch_size,
                                shuffle=True,
                                num_workers=args.num_workers,
-                               sampler=None)
+                               sampler=None,
+                               conf_preds=conf_preds,
+                               unknown_only=unknown_only)
 
+    # Use replace S1 to S2 for evaluation
     testloader = load_dataset(name=args.dataset_name,
-                              class_indices=class_indices[args.class_indices],
+                              class_indices=cls_idx,
                               dset='test',
                               transform='eval',
                               split=None,
@@ -41,10 +48,13 @@ def load_data(args):
                               batch_size=args.batch_size,
                               shuffle=False,
                               num_workers=args.num_workers,
-                              sampler=None)
+                              sampler=None,
+                              conf_preds=None,
+                              unknown_only=False)
 
+    # Use replace S1 to S2 for evaluation
     valloader = load_dataset(name=args.dataset_name,
-                             class_indices=class_indices[args.class_indices],
+                             class_indices=cls_idx,
                              dset='val',
                              transform='eval',
                              split=None,
@@ -52,34 +62,37 @@ def load_data(args):
                              batch_size=args.batch_size,
                              shuffle=False,
                              num_workers=args.num_workers,
-                             sampler=None)
+                             sampler=None,
+                             conf_preds=None,
+                             unknown_only=False)
 
     return trainloader, testloader, valloader
 
 
-@register_algorithm('PlainResNet')
-class PlainResNet(Algorithm):
+@register_algorithm('PlainStage2')
+class PlainStage2(Algorithm):
 
     """
     Overall training function.
     """
 
-    name = 'PlainResNet'
+    name = 'PlainStage2'
     net = None
     opt_net = None
     scheduler = None
 
     def __init__(self, args):
-        super(PlainResNet, self).__init__(args=args)
+        super(PlainStage2, self).__init__(args=args)
 
         # Training epochs and logging intervals
         self.num_epochs = args.num_epochs
         self.log_interval = args.log_interval
+        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
 
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader, self.testloader, self.valloader = load_data(args)
+        self.trainloader, self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=True)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):
@@ -87,6 +100,7 @@ class PlainResNet(Algorithm):
         # Setup cuda and networks #
         ###########################
         # setup network
+        # The only thing different from plain resnet is that init_feat_only is set to true now
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True)
@@ -124,7 +138,7 @@ class PlainResNet(Algorithm):
 
         N = len(self.trainloader)
 
-        for batch_idx, (data, labels) in enumerate(self.trainloader):
+        for batch_idx, (data, labels, _, _) in enumerate(self.trainloader):
 
             # log basic adda train info
             info_str = '[Train plain] Epoch: {} [{}/{} ({:.2f}%)] '.format(epoch, batch_idx,
@@ -214,6 +228,8 @@ class PlainResNet(Algorithm):
                 logits = self.net.classifier(feats)
 
                 # compute correct
+                # preds = logits.argmax(dim=1)
+
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 
                 for i in range(len(preds)):
@@ -268,41 +284,3 @@ class PlainResNet(Algorithm):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
         self.logger.info('Saving to {}'.format(self.weights_path))
         self.net.save(self.weights_path)
-
-
-@register_algorithm('FineTuneResNet')
-class FineTuneResNet(PlainResNet):
-
-    """
-    Overall training function.
-    """
-
-    name = 'FineTuneResNet'
-
-    def set_train(self):
-        ###########################
-        # Setup cuda and networks #
-        ###########################
-        # setup network
-        # The only thing different from plain resnet is that init_feat_only is set to true now
-        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
-        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True)
-
-        ######################
-        # Optimization setup #
-        ######################
-        # Setup optimizer parameters for each network component
-        net_optim_params_list = [
-            {'params': self.net.feature.parameters(),
-             'lr': self.args.lr_feature,
-             'momentum': self.args.momentum_feature,
-             'weight_decay': self.args.weight_decay_feature},
-            {'params': self.net.classifier.parameters(),
-             'lr': self.args.lr_classifier,
-             'momentum': self.args.momentum_classifier,
-             'weight_decay': self.args.weight_decay_classifier}
-        ]
-        # Setup optimizer and optimizer scheduler
-        self.opt_net = optim.SGD(net_optim_params_list)
-        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
