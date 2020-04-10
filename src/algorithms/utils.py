@@ -164,9 +164,14 @@ def stage_1_metric(preds, labels, unique_classes, class_counts):
            class_wrong_unconfident, percent_unknown, conf_preds
 
 
-def stage_2_metric(preds, max_probs, labels, theta):
+def stage_2_metric(preds, max_probs, labels, train_unique_labels, theta):
 
-    num_cls = len(np.unique(labels))
+    # TODO: Enable open classes.
+
+    num_cls = len(train_unique_labels)
+
+    missing_cls_in_test = list(set(train_unique_labels) - set(np.unique(labels)))
+    missing_cls_in_train = list(set(np.unique(labels)) - set(train_unique_labels))
 
     class_unconf_wrong = np.array([0. for _ in range(num_cls)])
     class_unconf_correct = np.array([0. for _ in range(num_cls)])
@@ -204,4 +209,6 @@ def stage_2_metric(preds, max_probs, labels, theta):
     return class_unconf_wrong / class_wrong,\
            class_unconf_correct / class_correct,\
            class_conf_correct / class_conf,\
-           total_unconf
+           total_unconf,\
+           missing_cls_in_test,\
+           missing_cls_in_train

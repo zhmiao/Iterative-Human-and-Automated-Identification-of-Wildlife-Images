@@ -500,24 +500,29 @@ class MemoryStage2(Algorithm):
 
             class_wrong_percent_unconfident, \
             class_correct_percent_unconfident, \
-            class_acc_confident, total_unconf = stage_2_metric(np.concatenate(total_preds, axis=0),
-                                                               np.concatenate(total_max_probs, axis=0),
-                                                               np.concatenate(total_labels, axis=0),
-                                                               self.args.theta)
+            class_acc_confident, total_unconf, \
+            missing_cls_in_test, \
+            missing_cls_in_train = stage_2_metric(np.concatenate(total_preds, axis=0),
+                                                  np.concatenate(total_max_probs, axis=0),
+                                                  np.concatenate(total_labels, axis=0),
+                                                  self.train_unique_labels,
+                                                  self.args.theta)
             # Record per class accuracies
             class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
             overall_acc = class_correct.sum() / eval_class_counts.sum()
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
             for i in range(len(class_acc)):
-                eval_info += 'Class {} (train counts {} '.format(i, self.train_class_counts[loader_uni_class][i])
-                eval_info += 'ann counts {}): '.format(self.train_annotation_counts[loader_uni_class][i])
-                eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
-                eval_info += 'Unconfident wrong % {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
-                eval_info += 'Unconfident correct % {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
-                eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
+                if i not in missing_cls_in_test:
+                    eval_info += 'Class {} (train counts {} '.format(i, self.train_class_counts[loader_uni_class][i])
+                    eval_info += 'ann counts {}): '.format(self.train_annotation_counts[loader_uni_class][i])
+                    eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
+                    eval_info += 'Unconfident wrong % {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
+                    eval_info += 'Unconfident correct % {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
+                    eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
 
             eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
+            eval_info += 'Missing classes in test: {}\n'.format(missing_cls_in_test)
 
             # Record missing classes in evaluation sets if exist
             missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
