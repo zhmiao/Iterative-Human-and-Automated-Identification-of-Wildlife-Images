@@ -207,7 +207,10 @@ class PlainStage2(Algorithm):
 
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        class_correct = np.array([0. for _ in range(len(eval_class_counts))])
+        loader_class_counts_dict = {loader_uni_class[i]: eval_class_counts[i] for i in range(len(loader_uni_class))}
+        eval_class_counts = np.array([loader_class_counts_dict[c]
+                                      if c in loader_class_counts_dict else 1e-7 for c in range(len(self.train_unique_labels))])
+        class_correct = np.array([0. for _ in range(len(self.train_unique_labels))])
 
         total_preds = []
         total_max_probs = []
@@ -253,14 +256,14 @@ class PlainStage2(Algorithm):
                                               self.args.theta)
 
         # Record per class accuracies
-        class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
+        # class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
+        class_acc = class_correct / eval_class_counts
         overall_acc = class_correct.sum() / eval_class_counts.sum()
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
-        for i in range(len(class_acc)):
+        for i in range(len(self.train_unique_labels)):
             if i not in missing_cls_in_test:
-                eval_info += 'Class {} (train counts {} '.format(i, self.train_class_counts[loader_uni_class][i])
-                eval_info += 'ann counts {}): '.format(self.train_annotation_counts[loader_uni_class][i])
+                eval_info += 'Class {} (train counts {}): '.format(i, self.train_class_counts[i])
                 eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
                 eval_info += 'Wrong % in unconfident {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
                 eval_info += 'Correct % in unconfident {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
