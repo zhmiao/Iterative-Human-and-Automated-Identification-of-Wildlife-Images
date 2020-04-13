@@ -226,12 +226,12 @@ class PlainResNet(Algorithm):
                 total_max_probs.append(max_probs.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
 
-        class_wrong_percent_unconfident, \
-        class_correct_percent_unconfident, \
-        class_acc_confident, total_unconf = stage_2_metric(np.concatenate(total_preds, axis=0),
-                                                           np.concatenate(total_max_probs, axis=0),
-                                                           np.concatenate(total_labels, axis=0),
-                                                           self.args.theta)
+        # class_wrong_percent_unconfident, \
+        # class_correct_percent_unconfident, \
+        # class_acc_confident, total_unconf = stage_2_metric(np.concatenate(total_preds, axis=0),
+        #                                                    np.concatenate(total_max_probs, axis=0),
+        #                                                    np.concatenate(total_labels, axis=0),
+        #                                                    self.args.theta)
 
         # Record per class accuracies
         class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
@@ -242,11 +242,11 @@ class PlainResNet(Algorithm):
         for i in range(len(class_acc)):
             eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
             eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
-            eval_info += 'Wrong % in unconfident {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
-            eval_info += 'Correct % in unconfident {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
-            eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
+            # eval_info += 'Wrong % in unconfident {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
+            # eval_info += 'Correct % in unconfident {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
+            # eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
 
-        eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
+        # eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
 
         # Record missing classes in evaluation sets if exist
         missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
