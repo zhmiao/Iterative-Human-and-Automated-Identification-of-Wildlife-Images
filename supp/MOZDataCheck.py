@@ -272,10 +272,22 @@ sorted_cat_s1 = sorted(list(zip(*np.unique(label_list_tr_s1, return_counts=True)
 sorted_cat_s2 = sorted(list(zip(*np.unique(label_list_tr_s2, return_counts=True))), key=lambda x:x[1], reverse=True)
 
 # %% codecell
+sorted_cat_s1
+
+# %% codecell
 class_indices_s1 = {e[0]:i for i, e in enumerate(sorted_cat_s1)}
 
 class_indices_s1
 
 
 # %% codecell
-add_class_indices_s2 = {e[0]:i:20 for i, e in enumerate(sorted_cat_s2) if e[0] not in class_indices_s1}
+add_class_indices_s2 = {}
+
+i = 0
+for e in sorted_cat_s2:
+    if e[0] not in class_indices_s1:
+        add_class_indices_s2[e[0]] = i + 20
+        i += 1
+
+# %% codecell
+add_class_indices_s2
