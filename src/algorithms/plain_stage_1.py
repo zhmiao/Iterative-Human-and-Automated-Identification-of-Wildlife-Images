@@ -26,7 +26,7 @@ def load_data(args):
     trainloader = load_dataset(name=args.dataset_name,
                                class_indices=cls_idx,
                                dset='train',
-                               transform='train',
+                               transform=args.train_transform,
                                split=args.train_split,
                                rootdir=args.dataset_root,
                                batch_size=args.batch_size,
@@ -311,7 +311,6 @@ class PlainStage1(Algorithm):
             self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
 
             return eval_acc_mac
-
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
