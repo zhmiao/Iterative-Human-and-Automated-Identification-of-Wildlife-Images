@@ -67,4 +67,5 @@ else:
     alg.set_eval()
     alg.logger.info('\nTesting...')
     _ = alg.evaluate(loader=alg.testloader)
+    # _ = alg.evaluate(loader=alg.valloader)
 
