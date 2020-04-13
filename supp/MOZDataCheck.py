@@ -291,3 +291,118 @@ for e in sorted_cat_s2:
 
 # %% codecell
 add_class_indices_s2
+
+# %% codecell
+target = 'Warthog'
+file_sel = file_list_te_s1[label_list_te_s1 == target]
+
+# %% codecell
+idx = random.randint(0, len(file_sel))
+Image.open(os.path.join(root, file_sel[idx]))
+
+# %% markdown
+# # 3. Empty picker datasets
+
+# %% codecell
+np.unique(label_list_all)
+empty_files = file_list_all[label_list_all == 'Ghost']
+
+non_empty_files = file_list_all[(label_list_all != 'Ghost')\
+                                & (label_list_all != 'Human')\
+                                & (label_list_all != 'Setup')\
+                                & (label_list_all != 'Fire')]
+
+non_empty_labels = label_list_all[(label_list_all != 'Ghost')\
+                                 & (label_list_all != 'Human')\
+                                 & (label_list_all != 'Setup')\
+                                 & (label_list_all != 'Fire')]
+
+non_empty_sec = sec_list_all[(label_list_all != 'Ghost')\
+                             & (label_list_all != 'Human')\
+                             & (label_list_all != 'Setup')\
+                             & (label_list_all != 'Fire')]
+
+non_empty_label_counts = sorted(list(zip(*np.unique(non_empty_labels, return_counts=True))), key=lambda x:x[1])
+
+non_empty_label_counts = [e for e in non_empty_label_counts if e[1] > 10]
+
+# %% codecell
+non_empty_label_counts
+
+# %% codecell
+
+empty_tr_list = open(os.path.join(root, 'SplitLists', 'train_empty.txt'), 'w')
+empty_te_list = open(os.path.join(root, 'SplitLists', 'test_empty.txt'), 'w')
+
+test_ratio = 0.1
+
+# %% codecell
+# Select empty files first
+np.random.seed(len(empty_files))
+np.random.shuffle(empty_files)
+
+test_empty_counts = int(len(empty_files) * test_ratio)
+
+file_empty_te = empty_files[:test_empty_counts]
+file_empty_tr = empty_files[test_empty_counts:]
+empty_labels_te = np.zeros(len(file_empty_te)).astype(np.int64)
+empty_labels_tr = np.zeros(len(file_empty_tr)).astype(np.int64)
+
+for f, l in zip(file_empty_tr, empty_labels_tr):
+    empty_tr_list.write(f + ' ' + str(l) + '\n')
+for f, l in zip(file_empty_te, empty_labels_te):
+    empty_te_list.write(f + ' ' + str(l) + '\n')
+
+# %% codecell
+for cat_id, (cat, count) in tqdm(enumerate(non_empty_label_counts), total=len(non_empty_label_counts)):
+
+    random.seed(count)
+
+    # Select category files, labels, and shooting seconds
+    file_sel = non_empty_files[non_empty_labels == cat]
+    label_sel = non_empty_labels[non_empty_labels == cat]
+    sec_sel = non_empty_sec[non_empty_labels == cat]
+
+    # Group images by shooting times
+    index_group = []
+    last_sec = 0.
+    same_shoot_index = []
+    for index, sec in enumerate(sec_sel):
+        if len(same_shoot_index) == 0:
+            same_shoot_index.append(index)
+        else:
+            if (sec - last_sec) < 2:
+                same_shoot_index.append(index)
+            else:
+                index_group.append(same_shoot_index)
+                same_shoot_index = [index]
+        last_sec = sec
+    if len(same_shoot_index) > 0:
+        index_group.append(same_shoot_index)
+
+    # Shuffle shooting groups and get random index list
+    random.shuffle(index_group)
+    index_rand = np.array([i for g in index_group for i in g])
+
+    # Generate counts for each set
+    train_test_split_ratio = 0.1
+    test_counts = int(train_test_split_ratio * len(file_sel))
+
+    # Only save for second season list
+    if test_counts < 50:
+        test_counts = 50
+
+    file_sel_te = file_sel[:test_counts]
+    file_sel_tr = file_sel[test_counts:]
+    label_sel_te = np.ones(len(label_sel[:test_counts])).astype(np.int64)
+    label_sel_tr = np.ones(len(label_sel[test_counts:])).astype(np.int64)
+
+    for f, l in zip(file_sel_tr, label_sel_tr):
+        empty_tr_list.write(f + ' ' + str(l) + '\n')
+    for f, l in zip(file_sel_te, label_sel_te):
+        empty_te_list.write(f + ' ' + str(l) + '\n')
+
+empty_tr_list.close()
+empty_te_list.close()
+
+# %% codecell
