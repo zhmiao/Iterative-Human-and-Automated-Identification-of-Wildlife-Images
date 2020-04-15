@@ -16,7 +16,8 @@ data_transforms = {
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
     'MOZ': transforms.Compose([
-        transforms.RandomResizedCrop(224, scale=(0.5, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
+        # transforms.RandomResizedCrop(224, scale=(0.1, 1.0), ratio=(3. / 4., 4. / 3.)),
+        transforms.RandomCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0),
         transforms.ToTensor(),
