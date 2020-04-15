@@ -323,8 +323,10 @@ class MemoryStage2(Algorithm):
             # computing reachability
             dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
             values_nn, labels_nn = torch.sort(dist_cur, 1)
-            scale = 10.0
-            reachability = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
+
+            # TODO!
+            # scale = 10.0
+            reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
 
             # computing memory feature by querying and associating visual memory
             values_memory = self.net.fc_hallucinator(feats.clone())
@@ -460,8 +462,7 @@ class MemoryStage2(Algorithm):
                 # computing reachability
                 dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
                 values_nn, labels_nn = torch.sort(dist_cur, 1)
-                scale = 10.0
-                reachability = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
+                reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
 
                 # computing memory feature by querying and associating visual memory
                 values_memory = self.net.fc_hallucinator(feats.clone())
@@ -478,8 +479,10 @@ class MemoryStage2(Algorithm):
                 # final logits
                 logits = self.net.cosnorm_classifier(meta_feats)
 
+                # TODO!!
                 # scale logits with reachability
-                reachability_logits = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                # reachability_logits = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                reachability_logits = (15 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                 logits = reachability_logits * logits
 
                 # compute correct
@@ -533,7 +536,10 @@ class MemoryStage2(Algorithm):
             for c in missing_classes:
                 eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
-            return eval_info, class_acc.mean(), overall_acc
+            return eval_info, class_acc.mean(), overall_acc,\
+                   class_wrong_percent_unconfident.mean(),\
+                   class_correct_percent_unconfident.mean(),\
+                   class_acc_confident.mean()
 
     def centroids_cal(self, loader):
 
@@ -563,9 +569,17 @@ class MemoryStage2(Algorithm):
         return centroids
 
     def evaluate(self, loader):
-        eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
+        eval_info, eval_acc_mac, eval_acc_mic,\
+        avg_unconf_wrong, avg_unconf_corr, avg_conf_acc = self.evaluate_epoch(loader)
+
+        eval_info += 'Macro Acc: {:.3f}; '.format(eval_acc_mac * 100)
+        eval_info += 'Micro Acc: {:.3f}; '.format(eval_acc_mic * 100)
+        eval_info += 'Avg Unconf Wrong %: {:.3f}; '.format(avg_unconf_wrong * 100)
+        eval_info += 'Avg Unconf Correct %: {:.3f}; '.format(avg_unconf_corr * 100)
+        eval_info += 'Conf cc %: {:.3f}\n'.format(avg_conf_acc * 100)
+
         self.logger.info(eval_info)
-        self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
+
         return eval_acc_mac
 
     def save_model(self):
