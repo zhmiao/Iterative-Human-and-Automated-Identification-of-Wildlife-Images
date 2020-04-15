@@ -35,7 +35,7 @@ def load_data(args):
                                      sampler=None)
 
     # Use replace S1 to S2 for evaluation
-    testloader = load_dataset(name=args.dataset_name,
+    testloader = load_dataset(name=args.dataset_name.replace('S1', 'S2'),
                               class_indices=cls_idx,
                               dset='test',
                               transform='eval',
