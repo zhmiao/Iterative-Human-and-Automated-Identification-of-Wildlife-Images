@@ -91,7 +91,7 @@ cat_sel_counts_s1, cat_leftout_counts_s1 = category_selection(label_list_s1, min
 cat_sel_counts_s2, cat_leftout_counts_s2 = category_selection(label_list_s2, min_count=150)
 
 # %% markdown
-# # 1. Combine Two Seasons
+# # 1. Combine Two Seasons And Split
 
 # %% codecell
 file_list_all = np.concatenate((file_list_s1, file_list_s2), axis=0)
@@ -265,64 +265,63 @@ add_class_indices_s2
 # # 3. Empty picker datasets
 
 # %% codecell
-np.unique(label_list_all)
-empty_files = file_list_all[label_list_all == 'Ghost']
 
-non_empty_files = file_list_all[(label_list_all != 'Ghost')\
-                                & (label_list_all != 'Human')\
-                                & (label_list_all != 'Setup')\
-                                & (label_list_all != 'Fire')]
+file_list_empty = file_list_all[label_list_all == 'Ghost']
 
-non_empty_labels = label_list_all[(label_list_all != 'Ghost')\
-                                 & (label_list_all != 'Human')\
-                                 & (label_list_all != 'Setup')\
-                                 & (label_list_all != 'Fire')]
+file_list_non_empty = file_list_all[(label_list_all != 'Ghost')\
+                                    & (label_list_all != 'Human')\
+                                    & (label_list_all != 'Setup')\
+                                    & (label_list_all != 'Fire')]
 
-non_empty_sec = sec_list_all[(label_list_all != 'Ghost')\
-                             & (label_list_all != 'Human')\
-                             & (label_list_all != 'Setup')\
-                             & (label_list_all != 'Fire')]
+label_list_non_empty = label_list_all[(label_list_all != 'Ghost')\
+                                      & (label_list_all != 'Human')\
+                                      & (label_list_all != 'Setup')\
+                                      & (label_list_all != 'Fire')]
 
-non_empty_label_counts = sorted(list(zip(*np.unique(non_empty_labels, return_counts=True))), key=lambda x:x[1])
+sec_list_non_empty = sec_list_all[(label_list_all != 'Ghost')\
+                                  & (label_list_all != 'Human')\
+                                  & (label_list_all != 'Setup')\
+                                  & (label_list_all != 'Fire')]
 
-non_empty_label_counts = [e for e in non_empty_label_counts if e[1] > 10]
-
-# %% codecell
-non_empty_label_counts
+label_counts_non_empty = sorted(list(zip(*np.unique(label_list_non_empty, return_counts=True))),
+                                key=lambda x:x[1], reverse=True)
+label_counts_non_empty = [e for e in label_counts_non_empty if e[1] > 10]
 
 # %% codecell
-
-empty_tr_list = open(os.path.join(root, 'SplitLists', 'train_empty.txt'), 'w')
-empty_te_list = open(os.path.join(root, 'SplitLists', 'test_empty.txt'), 'w')
+empty_picker_tr_list = open(os.path.join(root, 'SplitLists', 'train_empty_picker.txt'), 'w')
+empty_picker_te_list = open(os.path.join(root, 'SplitLists', 'test_empty_picker.txt'), 'w')
 
 test_ratio = 0.1
 
 # %% codecell
 # Select empty files first
-np.random.seed(len(empty_files))
-np.random.shuffle(empty_files)
+np.random.seed(len(file_list_empty))
 
-test_empty_counts = int(len(empty_files) * test_ratio)
+np.random.shuffle(file_list_empty)
 
-file_empty_te = empty_files[:test_empty_counts]
-file_empty_tr = empty_files[test_empty_counts:]
-empty_labels_te = np.zeros(len(file_empty_te)).astype(np.int64)
-empty_labels_tr = np.zeros(len(file_empty_tr)).astype(np.int64)
+empty_picker_test_counts = int(len(file_list_empty) * test_ratio)
 
-for f, l in zip(file_empty_tr, empty_labels_tr):
-    empty_tr_list.write(f + ' ' + str(l) + '\n')
-for f, l in zip(file_empty_te, empty_labels_te):
-    empty_te_list.write(f + ' ' + str(l) + '\n')
+file_empty_te = file_list_empty[:empty_picker_test_counts]
+file_empty_tr = file_list_empty[empty_picker_test_counts:]
+
+label_empty_te = np.zeros(len(file_empty_te)).astype(np.int64)
+label_empty_tr = np.zeros(len(file_empty_tr)).astype(np.int64)
+
+for f, l in zip(file_empty_tr, label_empty_tr):
+    empty_picker_tr_list.write(f + ' ' + str(l) + '\n')
+for f, l in zip(file_empty_te, label_empty_te):
+    empty_picker_te_list.write(f + ' ' + str(l) + '\n')
 
 # %% codecell
-for cat_id, (cat, count) in tqdm(enumerate(non_empty_label_counts), total=len(non_empty_label_counts)):
+# For non-empty files
+for cat_id, (cat, count) in tqdm(enumerate(label_counts_non_empty), total=len(label_counts_non_empty)):
 
     random.seed(count)
 
     # Select category files, labels, and shooting seconds
-    file_sel = non_empty_files[non_empty_labels == cat]
-    label_sel = non_empty_labels[non_empty_labels == cat]
-    sec_sel = non_empty_sec[non_empty_labels == cat]
+    file_sel = file_list_non_empty[label_list_non_empty == cat]
+    label_sel = label_list_non_empty[label_list_non_empty == cat]
+    sec_sel = sec_list_non_empty[label_list_non_empty == cat]
 
     # Group images by shooting times
     index_group = []
@@ -345,26 +344,29 @@ for cat_id, (cat, count) in tqdm(enumerate(non_empty_label_counts), total=len(no
     random.shuffle(index_group)
     index_rand = np.array([i for g in index_group for i in g])
 
+    # Use random indices to shuffle selected files
+    file_sel = file_sel[index_rand]
+
     # Generate counts for each set
     train_test_split_ratio = 0.1
     test_counts = int(train_test_split_ratio * len(file_sel))
 
-    # Only save for second season list
+    # If less then 50 test samples, make it to 50
     if test_counts < 50:
         test_counts = 50
 
     file_sel_te = file_sel[:test_counts]
     file_sel_tr = file_sel[test_counts:]
-    label_sel_te = np.ones(len(label_sel[:test_counts])).astype(np.int64)
-    label_sel_tr = np.ones(len(label_sel[test_counts:])).astype(np.int64)
+    label_sel_te = np.ones(len(file_sel_te)).astype(np.int64)
+    label_sel_tr = np.ones(len(file_sel_tr)).astype(np.int64)
 
     for f, l in zip(file_sel_tr, label_sel_tr):
-        empty_tr_list.write(f + ' ' + str(l) + '\n')
+        empty_picker_tr_list.write(f + ' ' + str(l) + '\n')
     for f, l in zip(file_sel_te, label_sel_te):
-        empty_te_list.write(f + ' ' + str(l) + '\n')
+        empty_picker_te_list.write(f + ' ' + str(l) + '\n')
 
-empty_tr_list.close()
-empty_te_list.close()
+empty_picker_tr_list.close()
+empty_picker_te_list.close()
 
 # %% markdown
 # # 4. Additional Datasets
