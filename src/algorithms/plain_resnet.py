@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 from .utils import register_algorithm, Algorithm, stage_2_metric
 from src.data.utils import load_dataset
+from src.data.class_aware_sampler import ClassAwareSampler
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
 
@@ -21,6 +22,20 @@ def load_data(args):
 
     print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
 
+    temp = load_dataset(name=args.dataset_name,
+                        class_indices=class_indices[args.class_indices],
+                        dset='train',
+                        transform='train',
+                        split=args.train_split,
+                        rootdir=args.dataset_root,
+                        batch_size=args.batch_size,
+                        shuffle=False,
+                        num_workers=args.num_workers,
+                        sampler=None)
+
+    # TODO!!!!!
+    sampler = ClassAwareSampler(temp.dataset.labels, 1)
+
     trainloader = load_dataset(name=args.dataset_name,
                                class_indices=class_indices[args.class_indices],
                                dset='train',
@@ -28,9 +43,9 @@ def load_data(args):
                                split=args.train_split,
                                rootdir=args.dataset_root,
                                batch_size=args.batch_size,
-                               shuffle=True,
+                               shuffle=False,
                                num_workers=args.num_workers,
-                               sampler=None)
+                               sampler=sampler)
 
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=class_indices[args.class_indices],
@@ -90,6 +105,10 @@ class PlainResNet(Algorithm):
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True)
+
+        if len(self.args.gpu) > 1:
+            self.net.feature = torch.nn.DataParallel(self.net.feature)
+            self.net.classifier = torch.nn.DataParallel(self.net.classifier)
 
         ######################
         # Optimization setup #
@@ -241,7 +260,7 @@ class PlainResNet(Algorithm):
 
         for i in range(len(class_acc)):
             eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
-            eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
+            eval_info += 'Acc {:.3f} \n'.format(class_acc[i] * 100)
             # eval_info += 'Wrong % in unconfident {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
             # eval_info += 'Correct % in unconfident {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
             # eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
