@@ -1,5 +1,63 @@
 class_indices = {}
 
+class_indices['MOZ_S1_ORI'] = {i: i for i in range(20)}
+
+class_indices['MOZ_S1_10'] = {
+    # 'Waterbuck': 0,
+    # 'Baboon': 1,
+    # 'Warthog': 2,
+    # 'Bushbuck': 3,
+    # 'Impala': 4,
+    # 'Oribi': 5,
+    # 'Elephant': 6,
+    # 'Nyala': 7,
+    # 'Genet': 8,
+    # 'Bushpig': 9,
+
+    # 'Baboon': 0,
+    # 'Waterbuck': 1,
+    # 'Warthog': 2,
+    # 'Bushbuck': 3,
+    # 'Impala': 4,
+    # 'Oribi': 5,
+    # 'Elephant': 6,
+    # 'Genet': 7,
+    # 'Nyala': 8,
+    # 'Porcupine': 9
+
+    # 'Waterbuck': 0,
+    # 'Baboon': 1,
+    # 'Warthog': 2,
+    # 'Bushbuck': 3,
+    # 'Impala': 4,
+    # 'Oribi': 5,
+    # 'Elephant': 6,
+    # 'Nyala': 7,
+    # 'Genet': 8,
+    # 'Bushpig': 9
+
+    'Waterbuck': 0,
+    'Baboon': 1,
+    'Warthog': 2,
+    'Bushbuck': 3,
+    'Impala': 4,
+    'Oribi': 5,
+    'Elephant': 6,
+    'Nyala': 7,
+    'Genet': 8,
+    'Civet': 9,
+    'Vervet': 10,
+    'Bushpig': 11,
+    'Reedbuck': 12,
+    'Kudu': 13,
+    'Porcupine': 14,
+    'Buffalo': 15,
+    'Sable_antelope': 16,
+    'Duiker_red': 17,
+    'Wildebeest': 18,
+    'Hartebeest': 19
+}
+
 class_indices['MOZ_S1'] = {
     'Waterbuck': 0,
     'Baboon': 1,
