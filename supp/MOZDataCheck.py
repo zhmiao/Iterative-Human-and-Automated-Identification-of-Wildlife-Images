@@ -90,23 +90,8 @@ def category_selection(label_list, min_count):
 cat_sel_counts_s1, cat_leftout_counts_s1 = category_selection(label_list_s1, min_count=150)
 cat_sel_counts_s2, cat_leftout_counts_s2 = category_selection(label_list_s2, min_count=150)
 
-# %% codecell
-set([e[0] for e in cat_sel_counts_s2]) - set([e[0] for e in cat_sel_counts_s1])
-
-# %% codecell
-set([e[0] for e in cat_sel_counts_s1]) - set([e[0] for e in cat_sel_counts_s2])
-
 # %% markdown
 # # 1. Combine Two Seasons
-
-# %% codecell
-root = '/home/zhmiao/datasets/ecology/Mozambique/'
-s1_ori = os.path.join(root, 'SplitLists', 'Mozambique_season_1_all.txt.ori')
-s2_ori = os.path.join(root, 'SplitLists', 'Mozambique_season_2_all.txt.ori')
-
-# %% codecell
-file_list_s1, label_list_s1, sec_list_s1 = read_ori_lists(s1_ori)
-file_list_s2, label_list_s2, sec_list_s2 = read_ori_lists(s2_ori)
 
 # %% codecell
 file_list_all = np.concatenate((file_list_s1, file_list_s2), axis=0)
@@ -114,18 +99,7 @@ label_list_all = np.concatenate((label_list_s1, label_list_s2), axis=0)
 sec_list_all = np.concatenate((sec_list_s1, sec_list_s2), axis=0)
 
 # %% codecell
-len(file_list_all)
-len(label_list_all)
-len(sec_list_all)
-
-# %% codecell
 cat_sel_counts_all, cat_leftout_counts_all = category_selection(label_list_all, min_count=150)
-
-# %% codecell
-cat_sel_counts_all
-
-# %% codecell
-len(cat_sel_counts_all)
 
 # %% codecell
 
@@ -163,6 +137,9 @@ for cat_id, (cat, count) in tqdm(enumerate(cat_sel_counts_all), total=len(cat_se
     # Shuffle shooting groups and get random index list
     random.shuffle(index_group)
     index_rand = np.array([i for g in index_group for i in g])
+
+    # Use random indices to shuffle selected files
+    file_sel = file_sel[index_rand]
 
     # Generate counts for each set
     train_test_split_ratio = 0.2
@@ -263,22 +240,14 @@ file_list_tr_s2, label_list_tr_s2 = read_lists(tr_s2)
 file_list_te_s2, label_list_te_s2 = read_lists(te_s2)
 
 # %% codecell
-len(np.unique(label_list_te_s1))
-len(np.unique(label_list_te_s2))
-
-# %% codecell
 sorted_cat_s1 = sorted(list(zip(*np.unique(label_list_tr_s1, return_counts=True))), key=lambda x:x[1], reverse=True)
-
 sorted_cat_s2 = sorted(list(zip(*np.unique(label_list_tr_s2, return_counts=True))), key=lambda x:x[1], reverse=True)
-
-# %% codecell
-sorted_cat_s1
 
 # %% codecell
 class_indices_s1 = {e[0]:i for i, e in enumerate(sorted_cat_s1)}
 
+# %% codecell
 class_indices_s1
-
 
 # %% codecell
 add_class_indices_s2 = {}
@@ -291,14 +260,6 @@ for e in sorted_cat_s2:
 
 # %% codecell
 add_class_indices_s2
-
-# %% codecell
-target = 'Warthog'
-file_sel = file_list_te_s1[label_list_te_s1 == target]
-
-# %% codecell
-idx = random.randint(0, len(file_sel))
-Image.open(os.path.join(root, file_sel[idx]))
 
 # %% markdown
 # # 3. Empty picker datasets
@@ -405,4 +366,154 @@ for cat_id, (cat, count) in tqdm(enumerate(non_empty_label_counts), total=len(no
 empty_tr_list.close()
 empty_te_list.close()
 
+# %% markdown
+# # 4. Additional Datasets
+
 # %% codecell
+tr_10_s1_list = open(os.path.join(root, 'SplitLists', 'train_ori_10_season_1.txt'), 'w')
+te_10_s1_list = open(os.path.join(root, 'SplitLists', 'test_ori_10_season_1.txt'), 'w')
+
+############
+# cat_id = 0
+# cat = cat_sel_counts_s1[0][0]
+# count = cat_sel_counts_s1[0][1]
+############
+
+for cat_id, (cat, count) in tqdm(enumerate(cat_sel_counts_s1), total=len(cat_sel_counts_s1)):
+
+    random.seed(count)
+
+    # Select category files, labels, and shooting seconds
+    file_sel = file_list_s1[label_list_s1 == cat]
+    label_sel = label_list_s1[label_list_s1 == cat]
+    # label_sel = np.array(cat_id for _ in range(len(file_sel)))
+    sec_sel = sec_list_s1[label_list_s1 == cat]
+
+    # Group images by shooting times
+    index_group = []
+    last_sec = 0.
+    same_shoot_index = []
+    for index, sec in enumerate(sec_sel):
+        if len(same_shoot_index) == 0:
+            same_shoot_index.append(index)
+        else:
+            if (sec - last_sec) < 2:
+                same_shoot_index.append(index)
+            else:
+                index_group.append(same_shoot_index)
+                same_shoot_index = [index]
+        last_sec = sec
+    if len(same_shoot_index) > 0:
+        index_group.append(same_shoot_index)
+
+    # Shuffle shooting groups and get random index list
+    random.shuffle(index_group)
+    index_rand = np.array([i for g in index_group for i in g])
+
+    # TODO: Implement index_rand!!!!
+
+    # Use random indices to shuffle selected files
+    file_sel = file_sel[index_rand]
+
+    # Generate counts for each set
+    train_test_split_ratio = 0.1
+    test_counts = int(train_test_split_ratio * len(file_sel))
+
+    # For the first 20 classes, generate two_season_split_ratio
+    # And save data to corresponding lists
+    if cat_id < 10:
+
+        file_sel_te_1 = file_sel[:test_counts]
+        file_sel_tr_1 = file_sel[test_counts:]
+
+        label_sel_te_1 = label_sel[:test_counts]
+        label_sel_tr_1 = label_sel[test_counts:]
+
+        for f, l in zip(file_sel_tr_1, label_sel_tr_1):
+            tr_10_s1_list.write(f + ' ' + l + '\n')
+
+        for f, l in zip(file_sel_te_1, label_sel_te_1):
+            te_10_s1_list.write(f + ' ' + l + '\n')
+
+tr_10_s1_list.close()
+te_10_s1_list.close()
+
+# %% codecell
+tr_10_s1_file, tr_10_s1_labels = read_lists(os.path.join(root, 'SplitLists', 'train_ori_10_season_1.txt'))
+{e[0]: i for i, e in enumerate(sorted(list(zip(*np.unique(tr_10_s1_labels, return_counts=True))), key=lambda x:x[1], reverse=True))}
+
+
+# %% codecell
+tr_10_mix_list = open(os.path.join(root, 'SplitLists', 'train_mix_10_season_1.txt'), 'w')
+te_10_mix_list = open(os.path.join(root, 'SplitLists', 'test_mix_10_season_1.txt'), 'w')
+
+############
+# cat_id = 0
+# cat = cat_sel_counts_all[0][0]
+# count = cat_sel_counts_all[0][1]
+############
+
+for cat_id, (cat, count) in tqdm(enumerate(cat_sel_counts_all), total=len(cat_sel_counts_all)):
+
+    random.seed(count)
+
+    # Select category files, labels, and shooting seconds
+    file_sel = file_list_all[label_list_all == cat]
+    label_sel = label_list_all[label_list_all == cat]
+    sec_sel = sec_list_all[label_list_all == cat]
+
+    # Group images by shooting times
+    index_group = []
+    last_sec = 0.
+    same_shoot_index = []
+    for index, sec in enumerate(sec_sel):
+        if len(same_shoot_index) == 0:
+            same_shoot_index.append(index)
+        else:
+            if (sec - last_sec) < 2:
+                same_shoot_index.append(index)
+            else:
+                index_group.append(same_shoot_index)
+                same_shoot_index = [index]
+        last_sec = sec
+    if len(same_shoot_index) > 0:
+        index_group.append(same_shoot_index)
+
+    # Shuffle shooting groups and get random index list
+    random.shuffle(index_group)
+    index_rand = np.array([i for g in index_group for i in g])
+
+    # TODO: Implement index_rand!!!!
+
+    # Use random indices to shuffle selected files
+    file_sel = file_sel[index_rand]
+
+    # Generate counts for each set
+    train_test_split_ratio = 0.1
+    test_counts = int(train_test_split_ratio * len(file_sel))
+
+    # For the first 20 classes, generate two_season_split_ratio
+    # And save data to corresponding lists
+    if cat_id < 10:
+
+        two_season_split_ratio = random.randint(30, 50) / 100
+        train_counts_1 = int(two_season_split_ratio * len(file_sel))
+
+        file_sel_te_1 = file_sel[:int(test_counts/2)]
+        file_sel_tr_1 = file_sel[test_counts:(test_counts + train_counts_1)]
+
+        label_sel_te_1 = label_sel[:int(test_counts/2)]
+        label_sel_tr_1 = label_sel[test_counts:(test_counts + train_counts_1)]
+
+        for f, l in zip(file_sel_tr_1, label_sel_tr_1):
+            tr_10_mix_list.write(f + ' ' + l + '\n')
+
+        for f, l in zip(file_sel_te_1, label_sel_te_1):
+            te_10_mix_list.write(f + ' ' + l + '\n')
+
+tr_10_mix_list.close()
+te_10_mix_list.close()
+
+# %% codecell
+tr_10_mix_file, tr_10_mix_labels = read_lists(os.path.join(root, 'SplitLists', 'train_mix_10_season_1.txt'))
+{e[0]: i for i, e in enumerate(sorted(list(zip(*np.unique(tr_10_mix_labels, return_counts=True))), key=lambda x:x[1], reverse=True))}
