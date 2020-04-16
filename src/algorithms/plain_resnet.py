@@ -22,20 +22,6 @@ def load_data(args):
 
     print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
 
-    temp = load_dataset(name=args.dataset_name,
-                        class_indices=class_indices[args.class_indices],
-                        dset='train',
-                        transform='train',
-                        split=args.train_split,
-                        rootdir=args.dataset_root,
-                        batch_size=args.batch_size,
-                        shuffle=False,
-                        num_workers=args.num_workers,
-                        sampler=None)
-
-    # TODO!!!!!
-    sampler = ClassAwareSampler(temp.dataset.labels, 1)
-
     trainloader = load_dataset(name=args.dataset_name,
                                class_indices=class_indices[args.class_indices],
                                dset='train',
@@ -43,9 +29,9 @@ def load_data(args):
                                split=args.train_split,
                                rootdir=args.dataset_root,
                                batch_size=args.batch_size,
-                               shuffle=False,
+                               shuffle=True,
                                num_workers=args.num_workers,
-                               sampler=sampler)
+                               sampler=None)
 
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=class_indices[args.class_indices],
