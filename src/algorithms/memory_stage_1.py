@@ -270,7 +270,7 @@ class MemoryStage1(Algorithm):
                 # Sort distances
                 values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
                 # expand to logits dimension and scale the smallest distance
-                reachability = (self.args.reach_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                 # scale logits with reachability
                 logits = reachability * logits
 
@@ -285,7 +285,7 @@ class MemoryStage1(Algorithm):
 
         f1,\
         class_acc_confident, class_percent_confident, false_pos_percent, \
-        class_percent_wrong_unconfident, \
+        class_wrong_percent_unconfident, \
         percent_unknown, conf_preds = stage_1_metric(np.concatenate(total_preds, axis=0),
                                                      np.concatenate(total_labels, axis=0),
                                                      loader_uni_class,
@@ -295,15 +295,20 @@ class MemoryStage1(Algorithm):
 
         for i in range(len(class_acc_confident)):
             eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
-            eval_info += 'Confident percentage: {:.2f};'.format(class_percent_confident[i] * 100)
-            eval_info += 'Unconfident wrong %: {:.2f};'.format(class_percent_confident[i] * 100)
+            eval_info += 'Confident percentage: {:.2f}; '.format(class_percent_confident[i] * 100)
+            eval_info += 'Unconfident wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
             eval_info += 'Accuracy: {:.3f} \n'.format(class_acc_confident[i] * 100)
 
         eval_info += 'Overall F1: {:.3f} \n'.format(f1)
         eval_info += 'False positive percentage: {:.3f} \n'.format(false_pos_percent * 100)
         eval_info += 'Selected unknown percentage: {:.3f} \n'.format(percent_unknown * 100)
 
+        eval_info += 'Avg conf %: {:.3f}; \n'.format(class_percent_confident.mean() * 100)
+        eval_info += 'Avg unconf wrong %: {:.3f}; \n'.format(class_wrong_percent_unconfident.mean() * 100)
+        eval_info += 'Conf acc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
+
         return eval_info, f1, conf_preds, np.concatenate(total_preds, axis=0)
+
 
     def validate_epoch(self, loader):
 
@@ -396,6 +401,7 @@ class MemoryStage1(Algorithm):
 
             # Evaluate
             eval_info, f1, conf_preds, init_pseudo = self.test_epoch(loader)
+
             self.logger.info(eval_info)
 
             conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')

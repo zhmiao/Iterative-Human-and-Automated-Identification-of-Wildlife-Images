@@ -263,14 +263,21 @@ class PlainStage2(Algorithm):
 
         for i in range(len(self.train_unique_labels)):
             if i not in missing_cls_in_test:
-                eval_info += 'Class {} (train counts {}): '.format(i, self.train_class_counts[i])
+                eval_info += 'Class {} (train counts {} '.format(i, self.train_class_counts[i])
+                eval_info += 'ann counts {}): '.format(self.train_annotation_counts[i])
                 eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
-                eval_info += 'Wrong % in unconfident {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
-                eval_info += 'Correct % in unconfident {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
+                eval_info += 'Unconfident wrong % {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
+                eval_info += 'Unconfident correct % {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
                 eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
 
         eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
         eval_info += 'Missing classes in test: {}\n'.format(missing_cls_in_test)
+
+        eval_info += 'Macro Acc: {:.3f}; '.format(class_acc.mean() * 100)
+        eval_info += 'Micro Acc: {:.3f}; '.format(overall_acc * 100)
+        eval_info += 'Avg Unconf Wrong %: {:.3f}; '.format(class_wrong_percent_unconfident.mean() * 100)
+        eval_info += 'Avg Unconf Correct %: {:.3f}; '.format(class_correct_percent_unconfident.mean() * 100)
+        eval_info += 'Conf cc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
 
         # Record missing classes in evaluation sets if exist
         missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
@@ -278,14 +285,11 @@ class PlainStage2(Algorithm):
         for c in missing_classes:
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
-        return eval_info, class_acc.mean(), overall_acc
+        return eval_info, class_acc.mean()
 
     def evaluate(self, loader):
-
-        eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
+        eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
-        self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
-
         return eval_acc_mac
 
     def save_model(self):

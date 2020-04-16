@@ -530,16 +530,19 @@ class MemoryStage2(Algorithm):
             eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
             eval_info += 'Missing classes in test: {}\n'.format(missing_cls_in_test)
 
+            eval_info += 'Macro Acc: {:.3f}; '.format(class_acc.mean() * 100)
+            eval_info += 'Micro Acc: {:.3f}; '.format(overall_acc * 100)
+            eval_info += 'Avg Unconf Wrong %: {:.3f}; '.format(class_wrong_percent_unconfident.mean() * 100)
+            eval_info += 'Avg Unconf Correct %: {:.3f}; '.format(class_correct_percent_unconfident.mean() * 100)
+            eval_info += 'Conf cc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
+
             # Record missing classes in evaluation sets if exist
             missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
             eval_info += 'Missing classes in evaluation set: '
             for c in missing_classes:
                 eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
-            return eval_info, class_acc.mean(), overall_acc,\
-                   class_wrong_percent_unconfident.mean(),\
-                   class_correct_percent_unconfident.mean(),\
-                   class_acc_confident.mean()
+            return eval_info, class_acc.mean()
 
     def centroids_cal(self, loader):
 
@@ -569,17 +572,8 @@ class MemoryStage2(Algorithm):
         return centroids
 
     def evaluate(self, loader):
-        eval_info, eval_acc_mac, eval_acc_mic,\
-        avg_unconf_wrong, avg_unconf_corr, avg_conf_acc = self.evaluate_epoch(loader)
-
-        eval_info += 'Macro Acc: {:.3f}; '.format(eval_acc_mac * 100)
-        eval_info += 'Micro Acc: {:.3f}; '.format(eval_acc_mic * 100)
-        eval_info += 'Avg Unconf Wrong %: {:.3f}; '.format(avg_unconf_wrong * 100)
-        eval_info += 'Avg Unconf Correct %: {:.3f}; '.format(avg_unconf_corr * 100)
-        eval_info += 'Conf cc %: {:.3f}\n'.format(avg_conf_acc * 100)
-
+        eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
-
         return eval_acc_mac
 
     def save_model(self):
