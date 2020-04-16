@@ -113,9 +113,9 @@ class_indices['MOZ_S2'] = {
     'Mongoose_bushy_tailed': 28
 }
 
-class_indices['EMPTY'] = {
-    0: 0,
-    1: 1
+class_indices['MOZ_EP'] = {
+    '0': 0,
+    '1': 1
 }
 
 class_indices['CCT_S1'] = {
