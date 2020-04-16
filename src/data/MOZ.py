@@ -56,6 +56,22 @@ class MOZ_S2(MOZ):
             self.data_split()
 
 
+@register_dataset_obj('MOZ_EP')
+class MOZ_EP(MOZ):
+
+    name = 'MOZ_EP'
+
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(MOZ_EP, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                     split=split, transform=transform)
+        if self.dset == 'val':
+            self.dset = 'test'  # MOZ does not use val for now.
+        ann_dir = os.path.join(self.ann_root, '{}_empty_picker.txt'.format(self.dset))
+        self.load_data(ann_dir)
+        if split is not None:
+            self.data_split()
+
+
 @register_dataset_obj('MOZ_S1_10')
 class MOZ_S1_10(MOZ):
 
