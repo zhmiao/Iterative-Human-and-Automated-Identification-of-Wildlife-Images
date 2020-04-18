@@ -189,9 +189,9 @@ class MemoryStage2(Algorithm):
                                                      gamma=self.args.gamma)
 
         self.opt_mem = optim.SGD([{'params': self.net.criterion_ctr.parameters(),
-                                   'lr': self.args.lr_classifier,
-                                   'momentum': self.args.momentum_classifier,
-                                   'weight_decay': self.args.weight_decay_classifier}])
+                                   'lr': self.args.lr_memory,
+                                   'momentum': self.args.momentum_memory,
+                                   'weight_decay': self.args.weight_decay_memory}])
         self.sch_mem = optim.lr_scheduler.StepLR(self.opt_mem, step_size=self.args.step_size,
                                                  gamma=self.args.gamma)
 
@@ -203,6 +203,45 @@ class MemoryStage2(Algorithm):
         self.logger.info('\nLoading from {}'.format(self.weights_path))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
+
+    def memory_forward(self, data):
+        # feature
+        feats = self.net.feature(data)
+
+        batch_size = feats.size(0)
+        feat_size = feats.size(1)
+
+        # get current centroids and detach it from graph
+        centroids = self.net.criterion_ctr.centroids.clone().detach()
+        centroids.requires_grad = False
+
+        # set up visual memory
+        feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
+        centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
+        keys_memory = centroids.clone()
+
+        # computing reachability
+        dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
+        values_nn, labels_nn = torch.sort(dist_cur, 1)
+
+        reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
+
+        # computing memory feature by querying and associating visual memory
+        values_memory = self.net.fc_hallucinator(feats.clone())
+        values_memory = values_memory.softmax(dim=1)
+        memory_feature = torch.matmul(values_memory, keys_memory)
+
+        # computing concept selector
+        concept_selector = self.net.fc_selector(feats.clone())
+        concept_selector = concept_selector.tanh()
+
+        # computing meta embedding
+        meta_feats = reachability * (feats + concept_selector * memory_feature)
+
+        # final logits
+        logits = self.net.cosnorm_classifier(meta_feats)
+
+        return feats, logits, values_nn
 
     def train_warm_epoch(self, epoch):
 
@@ -305,43 +344,8 @@ class MemoryStage2(Algorithm):
             ####################
             # Forward and loss #
             ####################
-            # feature
-            feats = self.net.feature(data)
 
-            batch_size = feats.size(0)
-            feat_size = feats.size(1)
-
-            # get current centroids and detach it from graph
-            centroids = self.net.criterion_ctr.centroids.clone().detach()
-            centroids.requires_grad = False
-
-            # set up visual memory
-            feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
-            centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
-            keys_memory = centroids.clone()
-
-            # computing reachability
-            dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
-            values_nn, labels_nn = torch.sort(dist_cur, 1)
-
-            # TODO!
-            # scale = 10.0
-            reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
-
-            # computing memory feature by querying and associating visual memory
-            values_memory = self.net.fc_hallucinator(feats.clone())
-            values_memory = values_memory.softmax(dim=1)
-            memory_feature = torch.matmul(values_memory, keys_memory)
-
-            # computing concept selector
-            concept_selector = self.net.fc_selector(feats.clone())
-            concept_selector = concept_selector.tanh()
-
-            # computing meta embedding
-            meta_feats = reachability * (feats + concept_selector * memory_feature)
-
-            # final logits
-            logits = self.net.cosnorm_classifier(meta_feats)
+            feats, logits, _ = self.memory_forward(data)
 
             preds = logits.argmax(dim=1)
 
@@ -444,45 +448,10 @@ class MemoryStage2(Algorithm):
                 data.requires_grad = False
                 labels.requires_grad = False
 
-                # forward
-                feats = self.net.feature(data)
+                _, logits, values_nn = self.memory_forward(data)
 
-                batch_size = feats.size(0)
-                feat_size = feats.size(1)
-
-                # get current centroids and detach it from graph
-                centroids = self.net.criterion_ctr.centroids.clone().detach()
-                centroids.requires_grad = False
-
-                # set up visual memory
-                feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
-                centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
-                keys_memory = centroids.clone()
-
-                # computing reachability
-                dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
-                values_nn, labels_nn = torch.sort(dist_cur, 1)
-                reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
-
-                # computing memory feature by querying and associating visual memory
-                values_memory = self.net.fc_hallucinator(feats.clone())
-                values_memory = values_memory.softmax(dim=1)
-                memory_feature = torch.matmul(values_memory, keys_memory)
-
-                # computing concept selector
-                concept_selector = self.net.fc_selector(feats.clone())
-                concept_selector = concept_selector.tanh()
-
-                # computing meta embedding
-                meta_feats = reachability * (feats + concept_selector * memory_feature)
-
-                # final logits
-                logits = self.net.cosnorm_classifier(meta_feats)
-
-                # TODO!!
                 # scale logits with reachability
-                # reachability_logits = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                reachability_logits = (15 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                reachability_logits = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                 logits = reachability_logits * logits
 
                 # compute correct
