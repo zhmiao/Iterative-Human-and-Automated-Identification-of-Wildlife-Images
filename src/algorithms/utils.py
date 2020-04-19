@@ -60,6 +60,28 @@ class Algorithm:
         pass
 
 
+def acc(preds, labels, train_label_counts):
+
+    class_counts_dict = {l: c for l, c in zip(*np.unique(labels, return_counts=True))}
+
+    label_counts = np.array([class_counts_dict[c]
+                             if c in class_counts_dict else 1e-7 for c in
+                             range(len(train_label_counts))])
+
+    class_correct = np.array([0. for _ in range(len(train_label_counts))])
+
+    for p, l in zip(preds, labels):
+        if p == l:
+            class_correct[l] += 1
+
+    class_acc = class_correct / label_counts
+
+    mac_acc = class_acc.mean()
+    mic_acc = class_correct.sum() / label_counts.sum()
+
+    return class_acc, mac_acc, mic_acc
+
+
 def f_measure(preds, labels):
     # f1 score for openset evaluation with close set accuracy
     true_pos = 0.

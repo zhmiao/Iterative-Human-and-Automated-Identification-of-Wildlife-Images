@@ -159,11 +159,8 @@ class MemoryStage1(PlainStage1):
             return f1
 
         else:
-
-            eval_info, eval_acc_mac, eval_acc_mic = self.validate_epoch(loader)
+            eval_info, eval_acc_mac = self.validate_epoch(loader)
             self.logger.info(eval_info)
-            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
-
             return eval_acc_mac
 
 

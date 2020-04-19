@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_2_metric
+from .utils import register_algorithm, Algorithm, acc
 from src.data.utils import load_dataset
 from src.data.class_aware_sampler import ClassAwareSampler
 from src.data.class_indices import class_indices
@@ -196,12 +196,9 @@ class PlainResNet(Algorithm):
 
         self.net.eval()
 
-        # Get unique classes in the loader and corresponding counts
-        loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        class_correct = np.array([0. for _ in range(len(eval_class_counts))])
+        loader_uni_class, _ = loader.dataset.class_counts_cal()
 
         total_preds = []
-        total_max_probs = []
         total_labels = []
 
         # Forward and record # correct predictions of each class
@@ -219,39 +216,23 @@ class PlainResNet(Algorithm):
                 logits = self.net.classifier(feats)
 
                 # compute correct
-                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
-
-                for i in range(len(preds)):
-                    pred = preds[i]
-                    label = labels[i]
-                    if pred == label:
-                        class_correct[label] += 1
+                _, preds = F.softmax(logits, dim=1).max(dim=1)
 
                 total_preds.append(preds.detach().cpu().numpy())
-                total_max_probs.append(max_probs.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
 
-        # class_wrong_percent_unconfident, \
-        # class_correct_percent_unconfident, \
-        # class_acc_confident, total_unconf = stage_2_metric(np.concatenate(total_preds, axis=0),
-        #                                                    np.concatenate(total_max_probs, axis=0),
-        #                                                    np.concatenate(total_labels, axis=0),
-        #                                                    self.args.theta)
+        total_preds = np.concatenate(total_preds, axis=0)
+        total_labels = np.concatenate(total_labels, axis=0)
 
-        # Record per class accuracies
-        class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
-        overall_acc = class_correct.sum() / eval_class_counts.sum()
+        class_acc, mac_acc, mic_acc = acc(total_preds, total_labels, self.train_class_counts)
 
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
         for i in range(len(class_acc)):
             eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
             eval_info += 'Acc {:.3f} \n'.format(class_acc[i] * 100)
-            # eval_info += 'Wrong % in unconfident {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
-            # eval_info += 'Correct % in unconfident {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
-            # eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
 
-        # eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
+        eval_info += 'Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(mac_acc * 100, mic_acc * 100)
 
         # Record missing classes in evaluation sets if exist
         missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
@@ -259,14 +240,11 @@ class PlainResNet(Algorithm):
         for c in missing_classes:
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
-        return eval_info, class_acc.mean(), overall_acc
+        return eval_info, mac_acc
 
     def evaluate(self, loader):
-
-        eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
+        eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
-        self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
-
         return eval_acc_mac
 
     def save_model(self):

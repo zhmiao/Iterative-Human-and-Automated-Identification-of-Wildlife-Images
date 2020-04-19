@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_2_metric
+from .utils import register_algorithm, Algorithm, stage_2_metric, acc
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.data.class_aware_sampler import ClassAwareSampler
@@ -424,10 +424,6 @@ class MemoryStage2(Algorithm):
 
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        loader_class_counts_dict = {loader_uni_class[i]: eval_class_counts[i] for i in range(len(loader_uni_class))}
-        eval_class_counts = np.array([loader_class_counts_dict[c]
-                                      if c in loader_class_counts_dict else 1e-7 for c in range(len(self.train_unique_labels))])
-        class_correct = np.array([0. for _ in range(len(self.train_unique_labels))])
 
         total_preds = []
         total_max_probs = []
@@ -456,11 +452,6 @@ class MemoryStage2(Algorithm):
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
-                for i in range(len(preds)):
-                    pred = preds[i]
-                    label = labels[i]
-                    if pred == label:
-                        class_correct[label] += 1
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_max_probs.append(max_probs.detach().cpu().numpy())
@@ -482,9 +473,10 @@ class MemoryStage2(Algorithm):
                                                   self.train_unique_labels,
                                                   self.args.theta)
             # Record per class accuracies
-            # class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
-            class_acc = class_correct / eval_class_counts
-            overall_acc = class_correct.sum() / eval_class_counts.sum()
+            class_acc, mac_acc, mic_acc = acc(np.concatenate(total_preds, axis=0),
+                                              np.concatenate(total_labels, axis=0),
+                                              self.train_class_counts)
+
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
             for i in range(len(self.train_unique_labels)):
@@ -499,8 +491,8 @@ class MemoryStage2(Algorithm):
             eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
             eval_info += 'Missing classes in test: {}\n'.format(missing_cls_in_test)
 
-            eval_info += 'Macro Acc: {:.3f}; '.format(class_acc.mean() * 100)
-            eval_info += 'Micro Acc: {:.3f}; '.format(overall_acc * 100)
+            eval_info += 'Macro Acc: {:.3f}; '.format(mac_acc * 100)
+            eval_info += 'Micro Acc: {:.3f}; '.format(mic_acc * 100)
             eval_info += 'Avg Unconf Wrong %: {:.3f}; '.format(class_wrong_percent_unconfident.mean() * 100)
             eval_info += 'Avg Unconf Correct %: {:.3f}; '.format(class_correct_percent_unconfident.mean() * 100)
             eval_info += 'Conf cc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
