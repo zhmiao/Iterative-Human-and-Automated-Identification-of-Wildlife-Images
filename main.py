@@ -20,6 +20,8 @@ parser.add_argument('--np_threads', default=4,
                     help='Num of threads of numpy.')
 parser.add_argument('--evaluate', default=False, action='store_true',
                     help='If evaluate the model.')
+parser.add_argument('--deploy', default=False, action='store_true',
+                    help='Actual model deployment.')
 args = parser.parse_args()
 
 #############################
@@ -59,13 +61,17 @@ setattr(args, 'logger', logger)
 # Algorithms #
 ##############
 alg = get_algorithm(args.algorithm, args)
-if not args.evaluate:
-    alg.set_train()
-    alg.logger.info('\nTraining...')
-    alg.train()
-else:
+if args.evaluate:
     alg.set_eval()
     alg.logger.info('\nTesting...')
     _ = alg.evaluate(loader=alg.testloader)
     # _ = alg.evaluate(loader=alg.valloader)
+elif args.deploy:
+    alg.set_eval()
+    alg.logger.info('\nDeploying...')
+    alg.deploy(loader=alg.deployloader)
+else:
+    alg.set_train()
+    alg.logger.info('\nTraining...')
+    alg.train()
 
