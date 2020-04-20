@@ -2,6 +2,7 @@
 import os
 from glob import glob
 from tqdm import tqdm
+from multiprocessing import Pool
 from PIL import Image, UnidentifiedImageError
 
 # %% codecell
@@ -38,9 +39,7 @@ for f in tqdm(raw_list):
 
 raw_list.close()
 
-
 # %% codecell
-
 def img_resize(f):
     save_dir = os.path.join(save_root, f)
     if not os.path.exists(save_dir):
@@ -54,3 +53,16 @@ def img_resize(f):
             img.save(save_dir)
         except:
             pass
+
+# %% codecell
+with Pool(30) as p:
+    p.map(img_resize, all_files, chunksize=2000)
+
+# %% codecell
+images = glob(os.path.join(save_root, '**/*.JPG'), recursive=True)
+
+# %% codecell
+resized_list = open(os.path.join(root, 'Mozambique', 'SplitLists' 'Mozambique_season_3_all.txt'), 'r')
+
+for f in tqdm(images):
+    resized_list.write(f.replace(save_root + '/', '') + '\n')
