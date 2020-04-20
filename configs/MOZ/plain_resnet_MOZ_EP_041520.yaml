@@ -1,6 +1,6 @@
 # training
 conf_id: 041520_EP
-algorithm: PlainResNet
+algorithm: EmptyPicker
 num_epochs: 6
 log_interval: 10
 limit_steps: 0
@@ -8,6 +8,7 @@ limit_steps: 0
 # data
 dataset_root: /home/zhmiao/datasets/ecology
 dataset_name: MOZ_EP
+deploy_dataset_name: MOZ_S3_ALL
 class_indices: MOZ_EP
 train_transform: MOZ
 train_split:  # Set to blank for full dataset
