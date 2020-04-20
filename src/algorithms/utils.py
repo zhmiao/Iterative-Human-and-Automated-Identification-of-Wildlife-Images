@@ -56,6 +56,9 @@ class Algorithm:
     def evaluate(self, loader):
         pass
 
+    def deploy(self, loader):
+        pass
+
     def save_model(self):
         pass
 
