@@ -21,6 +21,29 @@ s1_ori = os.path.join(root, 'SplitLists', 'Mozambique_season_1_all.txt.ori')
 s2_ori = os.path.join(root, 'SplitLists', 'Mozambique_season_2_all.txt.ori')
 
 # %% codecell
+def read_lists(path):
+
+    file_list = []
+    label_list = []
+
+    with open(path, 'r') as f:
+
+        for line in tqdm(f):
+
+            line = line.replace('\n', '')
+            line_sp = line.split(' ')
+            file = line_sp[0]
+            label = line_sp[1]
+
+            file_list.append(file)
+            label_list.append(label)
+
+    file_list = np.array(file_list)
+    label_list = np.array(label_list)
+
+    return file_list, label_list
+
+# %% codecell
 def read_ori_lists(path):
 
     file_list = []
@@ -60,10 +83,6 @@ def read_ori_lists(path):
     return file_list, label_list, sec_list
 
 # %% codecell
-file_list_s1, label_list_s1, sec_list_s1 = read_ori_lists(s1_ori)
-file_list_s2, label_list_s2, sec_list_s2 = read_ori_lists(s2_ori)
-
-# %% codecell
 def category_selection(label_list, min_count):
 
     unique_labels, label_counts = np.unique(label_list, return_counts=True)
@@ -87,6 +106,10 @@ def category_selection(label_list, min_count):
     return cat_sel, cat_leftout
 
 # %% codecell
+file_list_s1, label_list_s1, sec_list_s1 = read_ori_lists(s1_ori)
+file_list_s2, label_list_s2, sec_list_s2 = read_ori_lists(s2_ori)
+
+# %% codecell
 cat_sel_counts_s1, cat_leftout_counts_s1 = category_selection(label_list_s1, min_count=150)
 cat_sel_counts_s2, cat_leftout_counts_s2 = category_selection(label_list_s2, min_count=150)
 
@@ -100,6 +123,13 @@ sec_list_all = np.concatenate((sec_list_s1, sec_list_s2), axis=0)
 
 # %% codecell
 cat_sel_counts_all, cat_leftout_counts_all = category_selection(label_list_all, min_count=150)
+
+len(cat_sel_counts_all)
+
+len(cat_leftout_counts_all)
+cat_sel_counts_all
+cat_leftout_counts_all
+
 
 # %% codecell
 
@@ -199,31 +229,37 @@ tr_s2_list.close()
 te_s2_list.close()
 
 # %% markdown
-# # 2. Two season class indices
+# ## leftout season 2 testing dataset
+# %% codecell
+leftout_list = open(os.path.join(root, 'SplitLists', 'leftout_mix.txt'), 'w')
+for cat_id, (cat, count) in tqdm(enumerate(cat_leftout_counts_all), total=len(cat_leftout_counts_all)):
+    if cat != 'Ghost' and cat != 'Ground_hornbill' and cat != 'Sable':
+        file_sel = file_list_all[label_list_all == cat]
+        label_sel = label_list_all[label_list_all == cat]
+        for f, l in zip(file_sel, label_sel):
+            leftout_list.write(f + ' ' + l + '\n')
+leftout_list.close()
 
 # %% codecell
-# Load lists first
-def read_lists(path):
+leftout = os.path.join(root, 'SplitLists', 'leftout_mix.txt')
+te_s2 = os.path.join(root, 'SplitLists', 'test_mix_season_2.txt')
 
-    file_list = []
-    label_list = []
+file_list_leftout, label_list_leftout = read_lists(leftout)
+file_list_te_s2, label_list_te_s2 = read_lists(te_s2)
 
-    with open(path, 'r') as f:
+# %% codecell
+file_list_te_s2_leftout = np.concatenate((file_list_te_s2, file_list_leftout), axis=0)
+label_list_te_s2_leftout = np.concatenate((label_list_te_s2, label_list_leftout), axis=0)
 
-        for line in tqdm(f):
+te_s2_leftout_list = open(os.path.join(root, 'SplitLists', 'test_mix_season_2_with_leftout.txt'), 'w')
 
-            line = line.replace('\n', '')
-            line_sp = line.split(' ')
-            file = line_sp[0]
-            label = line_sp[1]
+for f, l in zip(file_list_te_s2_leftout, label_list_te_s2_leftout):
+    te_s2_leftout_list.write(f + ' ' + l + '\n')
 
-            file_list.append(file)
-            label_list.append(label)
+te_s2_leftout_list.close()
 
-    file_list = np.array(file_list)
-    label_list = np.array(label_list)
-
-    return file_list, label_list
+# %% markdown
+# # 2. Two season class indices
 
 # %% codecell
 root = '/home/zhmiao/datasets/ecology/Mozambique/'
