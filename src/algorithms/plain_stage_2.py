@@ -38,7 +38,6 @@ def load_data(args, conf_preds, unknown_only=False):
                                conf_preds=conf_preds,
                                unknown_only=unknown_only)
 
-    # Use replace S1 to S2 for evaluation
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
                               dset='test',
@@ -52,7 +51,6 @@ def load_data(args, conf_preds, unknown_only=False):
                               conf_preds=None,
                               unknown_only=False)
 
-    # Use replace S1 to S2 for evaluation
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
                              dset='val',
@@ -66,7 +64,18 @@ def load_data(args, conf_preds, unknown_only=False):
                              conf_preds=None,
                              unknown_only=False)
 
-    return trainloader, testloader, valloader
+    deployloader = load_dataset(name=args.deploy_dataset_name,
+                                class_indices=cls_idx,
+                                dset='deploy',
+                                transform='eval',
+                                split=None,
+                                rootdir=args.dataset_root,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=args.num_workers,
+                                sampler=None)
+
+    return trainloader, testloader, valloader, deployloader
 
 
 @register_algorithm('PlainStage2')
@@ -92,7 +101,8 @@ class PlainStage2(Algorithm):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader, self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=True)
+        self.trainloader, self.testloader, \
+        self.valloader, self.deployloader = load_data(args, self.conf_preds, unknown_only=True)
         self.train_unique_labels, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):
@@ -279,6 +289,12 @@ class PlainStage2(Algorithm):
         eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
         return eval_acc_mac
+
+    def deploy_epoch(self):
+        pass
+
+    def deploy(self, loader):
+        pass
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)

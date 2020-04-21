@@ -34,10 +34,9 @@ def load_data(args):
                                num_workers=args.num_workers,
                                sampler=None)
 
-    # Use replace S1 to S2 for evaluation
-    testloader = load_dataset(name=args.dataset_name.replace('S1', 'S2'),
+    testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
-                              dset='train',
+                              dset='test',
                               transform='eval',
                               split=None,
                               rootdir=args.dataset_root,
@@ -46,7 +45,6 @@ def load_data(args):
                               num_workers=args.num_workers,
                               sampler=None)
 
-    # Use replace S1 to S2 for evaluation
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
                              dset='val',
@@ -58,7 +56,19 @@ def load_data(args):
                              num_workers=args.num_workers,
                              sampler=None)
 
-    return trainloader, testloader, valloader
+    # Use replace S1 to S2 for deployment
+    deployloader = load_dataset(name=args.deploy_dataset_name,
+                                class_indices=cls_idx,
+                                dset='train',
+                                transform='eval',
+                                split=None,
+                                rootdir=args.dataset_root,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=args.num_workers,
+                                sampler=None)
+
+    return trainloader, testloader, valloader, deployloader
 
 
 @register_algorithm('PlainStage1')
@@ -83,7 +93,7 @@ class PlainStage1(Algorithm):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader, self.testloader, self.valloader = load_data(args)
+        self.trainloader, self.testloader, self.valloader, self.deployloader = load_data(args)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):
@@ -191,7 +201,7 @@ class PlainStage1(Algorithm):
 
         self.save_model()
 
-    def test_epoch(self, loader):
+    def deploy_epoch(self, loader):
 
         self.net.eval()
 
@@ -234,7 +244,8 @@ class PlainStage1(Algorithm):
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
         for i in range(len(class_acc_confident)):
-            eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
+            # TODO
+            eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class[loader_uni_class != -1]][i])
             eval_info += 'Confident percentage: {:.2f}; '.format(class_percent_confident[i] * 100)
             eval_info += 'Unconfident wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
             eval_info += 'Accuracy: {:.3f} \n'.format(class_acc_confident[i] * 100)
@@ -249,7 +260,7 @@ class PlainStage1(Algorithm):
 
         return eval_info, f1, conf_preds
 
-    def validate_epoch(self, loader):
+    def evaluate_epoch(self, loader):
 
         self.net.eval()
 
@@ -299,21 +310,17 @@ class PlainStage1(Algorithm):
         return eval_info, mac_acc
 
     def evaluate(self, loader):
+        eval_info, eval_acc_mac = self.evaluate_epoch(loader)
+        self.logger.info(eval_info)
+        return eval_acc_mac
 
-        if loader == self.testloader:
-            eval_info, f1, conf_preds = self.test_epoch(loader)
-            self.logger.info(eval_info)
-
-            conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
-            self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
-            conf_preds.tofile(conf_preds_path)
-
-            return f1
-
-        else:
-            eval_info, eval_acc_mac = self.validate_epoch(loader)
-            self.logger.info(eval_info)
-            return eval_acc_mac
+    def deploy(self, loader):
+        eval_info, f1, conf_preds = self.deploy_epoch(loader)
+        self.logger.info(eval_info)
+        conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
+        self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
+        conf_preds.tofile(conf_preds_path)
+        return f1
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
