@@ -260,6 +260,7 @@ class CCT_CIS_CROP_S2(CCT_CROP_ST2):
         if split is not None:
             self.data_split()
 
+
 @register_dataset_obj('CCT_TRANS_CROP')
 class CCT_TRANS_CROP(CCT_CROP_ST2):
 
