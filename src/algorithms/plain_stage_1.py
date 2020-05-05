@@ -186,6 +186,7 @@ class PlainStage1(Algorithm):
 
     def train(self):
 
+        best_epoch = 0
         best_acc = 0.
 
         for epoch in range(self.num_epochs):
@@ -197,8 +198,12 @@ class PlainStage1(Algorithm):
             self.logger.info('\nValidation.')
             val_acc_mac = self.evaluate(self.valloader)
             if val_acc_mac > best_acc:
+                self.logger.info('\nUpdating Best Model Weights!!')
                 self.net.update_best()
+                best_acc = val_acc_mac
+                best_epoch = epoch
 
+        self.logger.info('\nBest Model Appears at Epoch {}...'.format(best_epoch))
         self.save_model()
 
     def deploy_epoch(self, loader):

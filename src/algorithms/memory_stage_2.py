@@ -113,6 +113,22 @@ class MemoryStage2(Algorithm):
 
         self.trainloader_up = None
 
+        # # TODO!!!
+        # self.pseudo_labels = torch.tensor(self.trainloader_no_up.dataset.labels)
+        cls_idx = class_indices[self.args.class_indices]
+        self.trainloader_up = load_dataset(name=self.args.dataset_name,
+                                           class_indices=cls_idx,
+                                           dset='train',
+                                           transform='train',
+                                           split=None,
+                                           rootdir=self.args.dataset_root,
+                                           batch_size=self.args.batch_size,
+                                           shuffle=True,
+                                           num_workers=self.args.num_workers,
+                                           sampler=None,
+                                           conf_preds=self.conf_preds,
+                                           unknown_only=False)
+
         if args.limit_steps:
             self.logger.info('** LIMITING STEPS!!! **')
             self.max_batch = len(self.trainloader_no_up)
@@ -121,7 +137,8 @@ class MemoryStage2(Algorithm):
 
     def reset_trainloader(self):
         self.logger.info('\nReseting training loader and sampler with pseudo labels.')
-        self.infuse_pseudo_labels()
+        # TODO!!!!
+        # self.infuse_pseudo_labels()
         cls_idx = class_indices[self.args.class_indices]
         sampler = ClassAwareSampler(labels=self.pseudo_labels, num_samples_cls=self.args.num_samples_cls)
         self.trainloader_up = load_dataset(name=self.args.dataset_name,
@@ -408,16 +425,19 @@ class MemoryStage2(Algorithm):
 
         for epoch in range(self.args.hall_warm_up_epochs):
             # Each epoch, reset training loader and sampler with corresponding pseudo labels.
-            self.reset_trainloader()
+            # TODO!!!
+            # self.reset_trainloader()
             # Training
             self.train_warm_epoch(epoch)
 
+        best_epoch = 0
         best_acc = 0.
 
         for epoch in range(self.num_epochs):
 
             # Each epoch, reset training loader and sampler with corresponding pseudo labels.
-            self.reset_trainloader()
+            # TODO!!!
+            # self.reset_trainloader()
 
             # Training
             self.train_memory_epoch(epoch)
@@ -426,12 +446,18 @@ class MemoryStage2(Algorithm):
             self.logger.info('\nValidation.')
             val_acc_mac = self.evaluate(self.valloader)
             if val_acc_mac > best_acc:
+                self.logger.info('\nUpdating Best Model Weights!!')
                 self.net.update_best()
+                best_acc = val_acc_mac
+                best_epoch = epoch
 
+            # TODO!!!
             if epoch >= self.args.mem_warm_up_epochs:
                 self.logger.info('\nGenerating new pseudo labels.')
                 self.pseudo_labels = self.evaluate_epoch(self.trainloader_no_up, pseudo_labels=True)
+                self.reset_trainloader()
 
+        self.logger.info('\nBest Model Appears at Epoch {}...'.format(best_epoch))
         self.save_model()
 
     def evaluate_epoch(self, loader, pseudo_labels=False):
