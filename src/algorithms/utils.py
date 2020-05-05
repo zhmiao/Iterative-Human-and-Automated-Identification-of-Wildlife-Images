@@ -56,8 +56,33 @@ class Algorithm:
     def evaluate(self, loader):
         pass
 
+    def deploy(self, loader):
+        pass
+
     def save_model(self):
         pass
+
+
+def acc(preds, labels, train_label_counts):
+
+    class_counts_dict = {l: c for l, c in zip(*np.unique(labels, return_counts=True))}
+
+    label_counts = np.array([class_counts_dict[c]
+                             if c in class_counts_dict else 1e-7 for c in
+                             range(len(train_label_counts))])
+
+    class_correct = np.array([0. for _ in range(len(train_label_counts))])
+
+    for p, l in zip(preds, labels):
+        if p == l:
+            class_correct[l] += 1
+
+    class_acc = class_correct / label_counts
+
+    mac_acc = class_acc.mean()
+    mic_acc = class_correct.sum() / label_counts.sum()
+
+    return class_acc, mac_acc, mic_acc
 
 
 def f_measure(preds, labels):
@@ -164,9 +189,14 @@ def stage_1_metric(preds, labels, unique_classes, class_counts):
            class_wrong_unconfident, percent_unknown, conf_preds
 
 
-def stage_2_metric(preds, max_probs, labels, theta):
+def stage_2_metric(preds, max_probs, labels, train_unique_labels, theta):
 
-    num_cls = len(np.unique(labels))
+    # TODO: Enable open classes.
+
+    num_cls = len(train_unique_labels)
+
+    missing_cls_in_test = list(set(train_unique_labels) - set(np.unique(labels)))
+    missing_cls_in_train = list(set(np.unique(labels)) - set(train_unique_labels))
 
     class_unconf_wrong = np.array([0. for _ in range(num_cls)])
     class_unconf_correct = np.array([0. for _ in range(num_cls)])
@@ -204,4 +234,6 @@ def stage_2_metric(preds, max_probs, labels, theta):
     return class_unconf_wrong / class_wrong,\
            class_unconf_correct / class_correct,\
            class_conf_correct / class_conf,\
-           total_unconf
+           total_unconf,\
+           missing_cls_in_test,\
+           missing_cls_in_train

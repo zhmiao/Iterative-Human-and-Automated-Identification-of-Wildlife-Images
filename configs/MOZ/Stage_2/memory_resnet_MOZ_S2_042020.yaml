@@ -1,21 +1,18 @@
 # training
-conf_id: 040120_S2_CROP_spALL
+conf_id: 042020_MOZ_S2
 algorithm: MemoryStage2
-num_epochs: 30
-hall_warm_up_epochs: 1
-mem_warm_up_epochs: 5
-#mem_warm_up_epochs: 10
-# Sess 0 (Best)
-# limit_steps: 0
-# Sess 2
-limit_steps: 0
+num_epochs: 40
+hall_warm_up_epochs: 3
+mem_warm_up_epochs: 10
 log_interval: 10
+limit_steps:  0
 
 # data
 dataset_root: /home/zhmiao/datasets/ecology
-dataset_name: CCT_CIS_CROP_S2
-deploy_dataset_name: CCT_CIS_CROP_S2
-class_indices: CCT_S2
+dataset_name: MOZ_S2
+deploy_dataset_name: MOZ_S3_NEP
+class_indices: MOZ_S2
+train_transform: MOZ
 train_split:  # Set to blank for full dataset
 batch_size: 64
 num_workers: 4
@@ -24,11 +21,10 @@ num_samples_cls: 4
 # model
 model_name: MemoryResNetClassifier
 num_layers: 50
-weights_init: ./weights/MemoryStage1/032720_S1_CROP_spALL_0.pth
+weights_init: ./weights/MemoryStage1/041220_MOZ_S1_0.pth
 
 # optim
 ## feature
-# lr_feature: 0.001
 lr_feature: 0.001
 momentum_feature: 0.9
 weight_decay_feature: 0.0005
@@ -41,19 +37,13 @@ lr_memory: 0.01
 momentum_memory: 0.9
 weight_decay_memory: 0.0005
 ## lr_scheduler
-step_size: 10
+step_size: 15
 gamma: 0.1
 
 # center loss weight
-# Sess 1 (Best)
-#ctr_loss_weight: 0.01
-# Sess 2
 ctr_loss_weight: 0.01
 
 # reachability
-# Sess 1 (Best)
-# reachability_scale: 10.0
-# Sess 2
 reachability_scale: 10.0
 
 # confidence

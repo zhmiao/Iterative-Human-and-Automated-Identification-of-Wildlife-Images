@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_2_metric
+from .utils import register_algorithm, Algorithm, stage_2_metric, acc
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
@@ -38,7 +38,6 @@ def load_data(args, conf_preds, unknown_only=False):
                                conf_preds=conf_preds,
                                unknown_only=unknown_only)
 
-    # Use replace S1 to S2 for evaluation
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
                               dset='test',
@@ -52,7 +51,6 @@ def load_data(args, conf_preds, unknown_only=False):
                               conf_preds=None,
                               unknown_only=False)
 
-    # Use replace S1 to S2 for evaluation
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
                              dset='val',
@@ -66,7 +64,18 @@ def load_data(args, conf_preds, unknown_only=False):
                              conf_preds=None,
                              unknown_only=False)
 
-    return trainloader, testloader, valloader
+    deployloader = load_dataset(name=args.deploy_dataset_name,
+                                class_indices=cls_idx,
+                                dset='deploy',
+                                transform='eval',
+                                split=None,
+                                rootdir=args.dataset_root,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=args.num_workers,
+                                sampler=None)
+
+    return trainloader, testloader, valloader, deployloader
 
 
 @register_algorithm('PlainStage2')
@@ -92,8 +101,9 @@ class PlainStage2(Algorithm):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader, self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=True)
-        _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
+        self.trainloader, self.testloader, \
+        self.valloader, self.deployloader = load_data(args, self.conf_preds, unknown_only=True)
+        self.train_unique_labels, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):
         ###########################
@@ -186,6 +196,7 @@ class PlainStage2(Algorithm):
 
     def train(self):
 
+        best_epoch = 0
         best_acc = 0.
 
         for epoch in range(self.num_epochs):
@@ -197,8 +208,12 @@ class PlainStage2(Algorithm):
             self.logger.info('\nValidation.')
             val_acc_mac = self.evaluate(self.valloader)
             if val_acc_mac > best_acc:
+                self.logger.info('\nUpdating Best Model Weights!!')
                 self.net.update_best()
+                best_acc = val_acc_mac
+                best_epoch = epoch
 
+        self.logger.info('\nBest Model Appears at Epoch {}...'.format(best_epoch))
         self.save_model()
 
     def evaluate_epoch(self, loader):
@@ -207,7 +222,6 @@ class PlainStage2(Algorithm):
 
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        class_correct = np.array([0. for _ in range(len(eval_class_counts))])
 
         total_preds = []
         total_max_probs = []
@@ -228,15 +242,7 @@ class PlainStage2(Algorithm):
                 logits = self.net.classifier(feats)
 
                 # compute correct
-                # preds = logits.argmax(dim=1)
-
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
-
-                for i in range(len(preds)):
-                    pred = preds[i]
-                    label = labels[i]
-                    if pred == label:
-                        class_correct[label] += 1
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_max_probs.append(max_probs.detach().cpu().numpy())
@@ -244,25 +250,37 @@ class PlainStage2(Algorithm):
 
         class_wrong_percent_unconfident, \
         class_correct_percent_unconfident, \
-        class_acc_confident, total_unconf = stage_2_metric(np.concatenate(total_preds, axis=0),
-                                                           np.concatenate(total_max_probs, axis=0),
-                                                           np.concatenate(total_labels, axis=0),
-                                                           self.args.theta)
+        class_acc_confident, total_unconf, \
+        missing_cls_in_test, \
+        missing_cls_in_train = stage_2_metric(np.concatenate(total_preds, axis=0),
+                                              np.concatenate(total_max_probs, axis=0),
+                                              np.concatenate(total_labels, axis=0),
+                                              self.train_unique_labels,
+                                              self.args.theta)
 
         # Record per class accuracies
-        class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
-        overall_acc = class_correct.sum() / eval_class_counts.sum()
+        class_acc, mac_acc, mic_acc = acc(np.concatenate(total_preds, axis=0),
+                                          np.concatenate(total_labels, axis=0),
+                                          self.train_class_counts)
 
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
-        for i in range(len(class_acc)):
-            eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
-            eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
-            eval_info += 'Wrong % in unconfident {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
-            eval_info += 'Correct % in unconfident {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
-            eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
+        for i in range(len(self.train_unique_labels)):
+            if i not in missing_cls_in_test:
+                eval_info += 'Class {} (train counts {}): '.format(i, self.train_class_counts[i])
+                eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
+                eval_info += 'Unconfident wrong % {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
+                eval_info += 'Unconfident correct % {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
+                eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
 
         eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
+        eval_info += 'Missing classes in test: {}\n'.format(missing_cls_in_test)
+
+        eval_info += 'Macro Acc: {:.3f}; '.format(mac_acc * 100)
+        eval_info += 'Micro Acc: {:.3f}; '.format(mic_acc * 100)
+        eval_info += 'Avg Unconf Wrong %: {:.3f}; '.format(class_wrong_percent_unconfident.mean() * 100)
+        eval_info += 'Avg Unconf Correct %: {:.3f}; '.format(class_correct_percent_unconfident.mean() * 100)
+        eval_info += 'Conf cc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
 
         # Record missing classes in evaluation sets if exist
         missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
@@ -270,15 +288,18 @@ class PlainStage2(Algorithm):
         for c in missing_classes:
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
-        return eval_info, class_acc.mean(), overall_acc
+        return eval_info, class_acc.mean()
 
     def evaluate(self, loader):
-
-        eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
+        eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
-        self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
-
         return eval_acc_mac
+
+    def deploy_epoch(self):
+        pass
+
+    def deploy(self, loader):
+        pass
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)

@@ -143,8 +143,16 @@ class DiscCentroidsLoss(nn.Module):
         if feat.size(1) != self.feat_dim:
             raise ValueError("Center's dim: {0} should be equal to input feature's \
                             dim: {1}".format(self.feat_dim,feat.size(1)))
+
         batch_size_tensor = feat.new_empty(1).fill_(batch_size if self.size_average else 1)
+
         loss_attract = self.disccentroidslossfunc(feat.clone(), label, self.centroids.clone(), batch_size_tensor).squeeze()
+
+        # centroids_batch = self.centroids.clone().index_select(0, label.long())
+        # 
+        # margin_attract = 10
+        # 
+        # loss_attract = ((feat.clone() - centroids_batch).pow(2).sum() / 2.0 - margin_attract) / batch_size
 
         ############################
         # calculate repelling loss #
@@ -152,6 +160,7 @@ class DiscCentroidsLoss(nn.Module):
 
         distmat = torch.pow(feat.clone(), 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
                   torch.pow(self.centroids.clone(), 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
+
         distmat.addmm_(1, -2, feat.clone(), self.centroids.clone().t())
 
         classes = torch.arange(self.num_classes).long().cuda()
@@ -160,8 +169,8 @@ class DiscCentroidsLoss(nn.Module):
 
         distmat_neg = distmat
         distmat_neg[mask] = 0.0
-        margin = 10.0
-        loss_repel = torch.clamp(margin - distmat_neg.sum() / (batch_size * self.num_classes), 0.0, 1e6)
+        margin_repell = 10.0
+        loss_repel = torch.clamp(margin_repell - distmat_neg.sum() / (batch_size * self.num_classes), 0.0, 1e6)
 
         loss = loss_attract + 0.01 * loss_repel
 

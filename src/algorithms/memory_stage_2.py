@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import copy
 from datetime import datetime
 from tqdm import tqdm
 
@@ -7,7 +8,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_2_metric
+from .utils import register_algorithm, Algorithm, stage_2_metric, acc
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.data.class_aware_sampler import ClassAwareSampler
@@ -37,7 +38,6 @@ def load_data(args, conf_preds, unknown_only=False):
                                      conf_preds=conf_preds,
                                      unknown_only=unknown_only)
 
-    # Use replace S1 to S2 for evaluation
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
                               dset='test',
@@ -51,7 +51,6 @@ def load_data(args, conf_preds, unknown_only=False):
                               conf_preds=None,
                               unknown_only=False)
 
-    # Use replace S1 to S2 for evaluation
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
                              dset='val',
@@ -65,7 +64,18 @@ def load_data(args, conf_preds, unknown_only=False):
                              conf_preds=None,
                              unknown_only=False)
 
-    return trainloader_no_up, testloader, valloader
+    deployloader = load_dataset(name=args.deploy_dataset_name,
+                                class_indices=cls_idx,
+                                dset='test',
+                                transform='eval',
+                                split=None,
+                                rootdir=args.dataset_root,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=args.num_workers,
+                                sampler=None)
+
+    return trainloader_no_up, testloader, valloader, deployloader
 
 
 @register_algorithm('MemoryStage2')
@@ -96,12 +106,28 @@ class MemoryStage2(Algorithm):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader_no_up,\
-        self.testloader, self.valloader = load_data(args, self.conf_preds, unknown_only=False)
-        _, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
+        self.trainloader_no_up, self.testloader, \
+        self.valloader, self.deployloader = load_data(args, self.conf_preds, unknown_only=False)
+        self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
         self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
 
         self.trainloader_up = None
+
+        # # TODO!!!
+        # self.pseudo_labels = torch.tensor(self.trainloader_no_up.dataset.labels)
+        cls_idx = class_indices[self.args.class_indices]
+        self.trainloader_up = load_dataset(name=self.args.dataset_name,
+                                           class_indices=cls_idx,
+                                           dset='train',
+                                           transform='train',
+                                           split=None,
+                                           rootdir=self.args.dataset_root,
+                                           batch_size=self.args.batch_size,
+                                           shuffle=True,
+                                           num_workers=self.args.num_workers,
+                                           sampler=None,
+                                           conf_preds=self.conf_preds,
+                                           unknown_only=False)
 
         if args.limit_steps:
             self.logger.info('** LIMITING STEPS!!! **')
@@ -111,6 +137,8 @@ class MemoryStage2(Algorithm):
 
     def reset_trainloader(self):
         self.logger.info('\nReseting training loader and sampler with pseudo labels.')
+        # TODO!!!!
+        # self.infuse_pseudo_labels()
         cls_idx = class_indices[self.args.class_indices]
         sampler = ClassAwareSampler(labels=self.pseudo_labels, num_samples_cls=self.args.num_samples_cls)
         self.trainloader_up = load_dataset(name=self.args.dataset_name,
@@ -125,6 +153,11 @@ class MemoryStage2(Algorithm):
                                            sampler=sampler,
                                            conf_preds=self.conf_preds,
                                            unknown_only=False)
+
+    def infuse_pseudo_labels(self):
+        # infuse pseudo_labels with ground truth labels for unconfident predictions
+        self.pseudo_labels[np.array(self.conf_preds) == 0] \
+            = copy.deepcopy(torch.tensor(self.trainloader_no_up.dataset.labels)[np.array(self.conf_preds) == 0])
 
     def set_train(self):
         ###########################
@@ -189,9 +222,9 @@ class MemoryStage2(Algorithm):
                                                      gamma=self.args.gamma)
 
         self.opt_mem = optim.SGD([{'params': self.net.criterion_ctr.parameters(),
-                                   'lr': self.args.lr_classifier,
-                                   'momentum': self.args.momentum_classifier,
-                                   'weight_decay': self.args.weight_decay_classifier}])
+                                   'lr': self.args.lr_memory,
+                                   'momentum': self.args.momentum_memory,
+                                   'weight_decay': self.args.weight_decay_memory}])
         self.sch_mem = optim.lr_scheduler.StepLR(self.opt_mem, step_size=self.args.step_size,
                                                  gamma=self.args.gamma)
 
@@ -203,6 +236,45 @@ class MemoryStage2(Algorithm):
         self.logger.info('\nLoading from {}'.format(self.weights_path))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
+
+    def memory_forward(self, data):
+        # feature
+        feats = self.net.feature(data)
+
+        batch_size = feats.size(0)
+        feat_size = feats.size(1)
+
+        # get current centroids and detach it from graph
+        centroids = self.net.criterion_ctr.centroids.clone().detach()
+        centroids.requires_grad = False
+
+        # set up visual memory
+        feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
+        centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
+        keys_memory = centroids.clone()
+
+        # computing reachability
+        dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
+        values_nn, labels_nn = torch.sort(dist_cur, 1)
+
+        reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
+
+        # computing memory feature by querying and associating visual memory
+        values_memory = self.net.fc_hallucinator(feats.clone())
+        values_memory = values_memory.softmax(dim=1)
+        memory_feature = torch.matmul(values_memory, keys_memory)
+
+        # computing concept selector
+        concept_selector = self.net.fc_selector(feats.clone())
+        concept_selector = concept_selector.tanh()
+
+        # computing meta embedding
+        meta_feats = reachability * (feats + concept_selector * memory_feature)
+
+        # final logits
+        logits = self.net.cosnorm_classifier(meta_feats)
+
+        return feats, logits, values_nn
 
     def train_warm_epoch(self, epoch):
 
@@ -229,7 +301,7 @@ class MemoryStage2(Algorithm):
             # Setup data variables #
             ########################
             # assign pseudo labels using initial pseudo labels
-            labels[confs == 1] = self.pseudo_labels[indices][confs == 1]
+            labels[confs == 1] = copy.deepcopy(self.pseudo_labels[indices][confs == 1])
             # assign devices
             data, labels = data.cuda(), labels.cuda()
             data.requires_grad = False
@@ -296,7 +368,7 @@ class MemoryStage2(Algorithm):
             # Setup data variables #
             ########################
             # assign pseudo labels
-            labels[confs == 1] = self.pseudo_labels[indices][confs == 1]
+            labels[confs == 1] = copy.deepcopy(self.pseudo_labels[indices][confs == 1])
             # assign devices
             data, labels = data.cuda(), labels.cuda()
             data.requires_grad = False
@@ -305,41 +377,8 @@ class MemoryStage2(Algorithm):
             ####################
             # Forward and loss #
             ####################
-            # feature
-            feats = self.net.feature(data)
 
-            batch_size = feats.size(0)
-            feat_size = feats.size(1)
-
-            # get current centroids and detach it from graph
-            centroids = self.net.criterion_ctr.centroids.clone().detach()
-            centroids.requires_grad = False
-
-            # set up visual memory
-            feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
-            centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
-            keys_memory = centroids.clone()
-
-            # computing reachability
-            dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
-            values_nn, labels_nn = torch.sort(dist_cur, 1)
-            scale = 10.0
-            reachability = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
-
-            # computing memory feature by querying and associating visual memory
-            values_memory = self.net.fc_hallucinator(feats.clone())
-            values_memory = values_memory.softmax(dim=1)
-            memory_feature = torch.matmul(values_memory, keys_memory)
-
-            # computing concept selector
-            concept_selector = self.net.fc_selector(feats.clone())
-            concept_selector = concept_selector.tanh()
-
-            # computing meta embedding
-            meta_feats = reachability * (feats + concept_selector * memory_feature)
-
-            # final logits
-            logits = self.net.cosnorm_classifier(meta_feats)
+            feats, logits, _ = self.memory_forward(data)
 
             preds = logits.argmax(dim=1)
 
@@ -386,16 +425,19 @@ class MemoryStage2(Algorithm):
 
         for epoch in range(self.args.hall_warm_up_epochs):
             # Each epoch, reset training loader and sampler with corresponding pseudo labels.
-            self.reset_trainloader()
+            # TODO!!!
+            # self.reset_trainloader()
             # Training
             self.train_warm_epoch(epoch)
 
+        best_epoch = 0
         best_acc = 0.
 
         for epoch in range(self.num_epochs):
 
             # Each epoch, reset training loader and sampler with corresponding pseudo labels.
-            self.reset_trainloader()
+            # TODO!!!
+            # self.reset_trainloader()
 
             # Training
             self.train_memory_epoch(epoch)
@@ -404,12 +446,18 @@ class MemoryStage2(Algorithm):
             self.logger.info('\nValidation.')
             val_acc_mac = self.evaluate(self.valloader)
             if val_acc_mac > best_acc:
+                self.logger.info('\nUpdating Best Model Weights!!')
                 self.net.update_best()
+                best_acc = val_acc_mac
+                best_epoch = epoch
 
+            # TODO!!!
             if epoch >= self.args.mem_warm_up_epochs:
                 self.logger.info('\nGenerating new pseudo labels.')
                 self.pseudo_labels = self.evaluate_epoch(self.trainloader_no_up, pseudo_labels=True)
+                self.reset_trainloader()
 
+        self.logger.info('\nBest Model Appears at Epoch {}...'.format(best_epoch))
         self.save_model()
 
     def evaluate_epoch(self, loader, pseudo_labels=False):
@@ -418,8 +466,8 @@ class MemoryStage2(Algorithm):
 
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        class_correct = np.array([0. for _ in range(len(eval_class_counts))])
 
+        total_prob_diffs = []
         total_preds = []
         total_max_probs = []
         total_labels = []
@@ -439,55 +487,20 @@ class MemoryStage2(Algorithm):
                 data.requires_grad = False
                 labels.requires_grad = False
 
-                # forward
-                feats = self.net.feature(data)
+                _, logits, values_nn = self.memory_forward(data)
 
-                batch_size = feats.size(0)
-                feat_size = feats.size(1)
-
-                # get current centroids and detach it from graph
-                centroids = self.net.criterion_ctr.centroids.clone().detach()
-                centroids.requires_grad = False
-
-                # set up visual memory
-                feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
-                centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
-                keys_memory = centroids.clone()
-
-                # computing reachability
-                dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
-                values_nn, labels_nn = torch.sort(dist_cur, 1)
-                scale = 10.0
-                reachability = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
-
-                # computing memory feature by querying and associating visual memory
-                values_memory = self.net.fc_hallucinator(feats.clone())
-                values_memory = values_memory.softmax(dim=1)
-                memory_feature = torch.matmul(values_memory, keys_memory)
-
-                # computing concept selector
-                concept_selector = self.net.fc_selector(feats.clone())
-                concept_selector = concept_selector.tanh()
-
-                # computing meta embedding
-                meta_feats = reachability * (feats + concept_selector * memory_feature)
-
-                # final logits
-                logits = self.net.cosnorm_classifier(meta_feats)
-
-                # TODO!!!!
                 # scale logits with reachability
-                reachability_logits = (scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                reachability_logits = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                 logits = reachability_logits * logits
 
-                # compute correct
-                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
-                for i in range(len(preds)):
-                    pred = preds[i]
-                    label = labels[i]
-                    if pred == label:
-                        class_correct[label] += 1
+                # calculate probs
+                probs = F.softmax(logits, dim=1)
+                # TODO!!!!
+                top_2_probs, _ = torch.topk(probs, 2, dim=1)
+                prob_diffs = top_2_probs[:, 0] - top_2_probs[:, 1]
+                max_probs, preds = probs.max(dim=1)
 
+                total_prob_diffs.append(prob_diffs.detach().cpu().numpy())
                 total_preds.append(preds.detach().cpu().numpy())
                 total_max_probs.append(max_probs.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
@@ -500,24 +513,48 @@ class MemoryStage2(Algorithm):
 
             class_wrong_percent_unconfident, \
             class_correct_percent_unconfident, \
-            class_acc_confident, total_unconf = stage_2_metric(np.concatenate(total_preds, axis=0),
-                                                               np.concatenate(total_max_probs, axis=0),
-                                                               np.concatenate(total_labels, axis=0),
-                                                               self.args.theta)
+            class_acc_confident, total_unconf, \
+            missing_cls_in_test, \
+            missing_cls_in_train = stage_2_metric(np.concatenate(total_preds, axis=0),
+                                                  np.concatenate(total_max_probs, axis=0),
+                                                  np.concatenate(total_labels, axis=0),
+                                                  self.train_unique_labels,
+                                                  self.args.theta)
+
+            # class_wrong_percent_unconfident, \
+            # class_correct_percent_unconfident, \
+            # class_acc_confident, total_unconf, \
+            # missing_cls_in_test, \
+            # missing_cls_in_train = stage_2_metric(np.concatenate(total_preds, axis=0),
+            #                                       np.concatenate(total_prob_diffs, axis=0),
+            #                                       np.concatenate(total_labels, axis=0),
+            #                                       self.train_unique_labels,
+            #                                       self.args.theta)
+
             # Record per class accuracies
-            class_acc = class_correct[loader_uni_class] / eval_class_counts[loader_uni_class]
-            overall_acc = class_correct.sum() / eval_class_counts.sum()
+            class_acc, mac_acc, mic_acc = acc(np.concatenate(total_preds, axis=0),
+                                              np.concatenate(total_labels, axis=0),
+                                              self.train_class_counts)
+
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
-            for i in range(len(class_acc)):
-                eval_info += 'Class {} (train counts {} '.format(i, self.train_class_counts[loader_uni_class][i])
-                eval_info += 'ann counts {}): '.format(self.train_annotation_counts[loader_uni_class][i])
-                eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
-                eval_info += 'Unconfident wrong % {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
-                eval_info += 'Unconfident correct % {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
-                eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
+            for i in range(len(self.train_unique_labels)):
+                if i not in missing_cls_in_test:
+                    eval_info += 'Class {} (train counts {} '.format(i, self.train_class_counts[i])
+                    eval_info += 'ann counts {}): '.format(self.train_annotation_counts[i])
+                    eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
+                    eval_info += 'Unconfident wrong % {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
+                    eval_info += 'Unconfident correct % {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
+                    eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
 
             eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
+            eval_info += 'Missing classes in test: {}\n'.format(missing_cls_in_test)
+
+            eval_info += 'Macro Acc: {:.3f}; '.format(mac_acc * 100)
+            eval_info += 'Micro Acc: {:.3f}; '.format(mic_acc * 100)
+            eval_info += 'Avg Unconf Wrong %: {:.3f}; '.format(class_wrong_percent_unconfident.mean() * 100)
+            eval_info += 'Avg Unconf Correct %: {:.3f}; '.format(class_correct_percent_unconfident.mean() * 100)
+            eval_info += 'Conf cc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
 
             # Record missing classes in evaluation sets if exist
             missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
@@ -525,7 +562,7 @@ class MemoryStage2(Algorithm):
             for c in missing_classes:
                 eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
-            return eval_info, class_acc.mean(), overall_acc
+            return eval_info, class_acc.mean()
 
     def centroids_cal(self, loader):
 
@@ -555,10 +592,15 @@ class MemoryStage2(Algorithm):
         return centroids
 
     def evaluate(self, loader):
-        eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
+        eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
-        self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
         return eval_acc_mac
+
+    def deploy_epoch(self):
+        pass
+
+    def deploy(self, loader):
+        pass
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)

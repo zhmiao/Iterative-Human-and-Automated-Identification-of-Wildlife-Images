@@ -1,30 +1,29 @@
 # training
-conf_id: 040120_S2_CROP_spALL
-algorithm: PlainStage2
+conf_id: 031020_FT_S2_CROP_spALL
+algorithm: FineTuneResNet
 num_epochs: 30
 log_interval: 10
 
 # data
 dataset_root: /home/zhmiao/datasets/ecology
-dataset_name: CCT_CIS_CROP_S2
-deploy_dataset_name: CCT_CIS_CROP_S2
+dataset_name: CCT_TRANS_CROP
 class_indices: CCT_S2
-train_split:  # Set to blank for full dataset
+train_split: # Set to blank for full dataset
 batch_size: 64
 num_workers: 4
 
 # model
 model_name: PlainResNetClassifier
 num_layers: 50
-weights_init: ./weights/PlainStage1/032620_S1_CROP_spALL_0.pth
+weights_init: ./weights/PlainResNet/031020_S1_CROP_spALL_0.pth
 
 # optim
 ## feature
-lr_feature: 0.001
+lr_feature: 0.0001
 momentum_feature: 0.9
 weight_decay_feature: 0.0005
 ## classifier
-lr_classifier: 0.01
+lr_classifier: 0.001
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
 ## lr_scheduler

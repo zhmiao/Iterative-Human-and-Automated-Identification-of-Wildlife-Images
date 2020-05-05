@@ -7,6 +7,7 @@ log_interval: 10
 # data
 dataset_root: /home/zhmiao/datasets/ecology
 dataset_name: CCT_CIS_CROP_S1
+deploy_dataset_name: CCT_CIS_CROP_S2
 class_indices: CCT_S1
 train_split:  # Set to blank for full dataset
 batch_size: 64

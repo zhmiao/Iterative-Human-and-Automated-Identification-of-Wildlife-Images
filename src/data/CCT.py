@@ -261,3 +261,24 @@ class CCT_CIS_CROP_S2(CCT_CROP_ST2):
             self.data_split()
 
 
+@register_dataset_obj('CCT_TRANS_CROP')
+class CCT_TRANS_CROP(CCT_CROP_ST2):
+
+    name = 'CCT_TRANS_CROP'
+
+    def __init__(self, rootdir, class_indices, dset='train', split=None,
+                 transform=None, conf_preds=None, unknown_only=False):
+        super(CCT_TRANS_CROP, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                             split=split, transform=transform, conf_preds=conf_preds,
+                                             unknown_only=unknown_only)
+        if self.dset == 'train':
+            ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_2.json'.format(dset))
+        else:
+            ann_dir = os.path.join(self.ann_root, 'trans_{}_annotations.json'.format(dset))
+
+        self.load_data(ann_dir)
+        if unknown_only:
+            self.pick_unknown()
+        if split is not None:
+            self.data_split()
+

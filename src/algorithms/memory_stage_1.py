@@ -7,12 +7,9 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .plain_stage_1 import PlainStage1, load_data
-from .utils import register_algorithm, Algorithm, stage_1_metric
-from src.data.utils import load_dataset
+from .utils import register_algorithm, stage_1_metric
 from src.data.class_indices import class_indices
-from src.models.utils import get_model
-
+from src.algorithms.plain_stage_1 import PlainStage1
 
 @register_algorithm('MemoryStage1')
 class MemoryStage1(PlainStage1):
@@ -30,7 +27,7 @@ class MemoryStage1(PlainStage1):
     def __init__(self, args):
         super(MemoryStage1, self).__init__(args=args)
 
-    def test_epoch(self, loader):
+    def deploy_epoch(self, loader):
 
         self.net.eval()
 
@@ -63,7 +60,7 @@ class MemoryStage1(PlainStage1):
                 # Sort distances
                 values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
                 # expand to logits dimension and scale the smallest distance
-                reachability = (self.args.reach_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                 # scale logits with reachability
                 logits = reachability * logits
 
@@ -78,7 +75,7 @@ class MemoryStage1(PlainStage1):
 
         f1,\
         class_acc_confident, class_percent_confident, false_pos_percent, \
-        class_percent_wrong_unconfident, \
+        class_wrong_percent_unconfident, \
         percent_unknown, conf_preds = stage_1_metric(np.concatenate(total_preds, axis=0),
                                                      np.concatenate(total_labels, axis=0),
                                                      loader_uni_class,
@@ -87,14 +84,19 @@ class MemoryStage1(PlainStage1):
         eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
         for i in range(len(class_acc_confident)):
-            eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
-            eval_info += 'Confident percentage: {:.2f};'.format(class_percent_confident[i] * 100)
-            eval_info += 'Unconfident wrong %: {:.2f};'.format(class_percent_confident[i] * 100)
+            # TODO change loader_uni_class behavior
+            eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class[loader_uni_class != -1]][i])
+            eval_info += 'Confident percentage: {:.2f}; '.format(class_percent_confident[i] * 100)
+            eval_info += 'Unconfident wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
             eval_info += 'Accuracy: {:.3f} \n'.format(class_acc_confident[i] * 100)
 
         eval_info += 'Overall F1: {:.3f} \n'.format(f1)
         eval_info += 'False positive percentage: {:.3f} \n'.format(false_pos_percent * 100)
         eval_info += 'Selected unknown percentage: {:.3f} \n'.format(percent_unknown * 100)
+
+        eval_info += 'Avg conf %: {:.3f}; \n'.format(class_percent_confident.mean() * 100)
+        eval_info += 'Avg unconf wrong %: {:.3f}; \n'.format(class_wrong_percent_unconfident.mean() * 100)
+        eval_info += 'Conf acc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
 
         return eval_info, f1, conf_preds, np.concatenate(total_preds, axis=0)
 
@@ -125,43 +127,37 @@ class MemoryStage1(PlainStage1):
 
         return centroids
 
-    def evaluate(self, loader):
+    def deploy(self, loader):
 
-        if loader == self.testloader:
-
-            # Calculate training data centroids first
-            centroids_path = self.weights_path.replace('.pth', '_centroids.npy')
-            if os.path.exists(centroids_path):
-                self.logger.info('Loading centroids from {}.\n'.format(centroids_path))
-                cent_np = np.fromfile(centroids_path, dtype=np.float32).reshape(-1, self.net.feature_dim)
-                self.centroids = torch.from_numpy(cent_np).cuda()
-            else:
-                self.logger.info('Calculating training data centroids.\n')
-                self.centroids = self.centroids_cal(self.trainloader)
-                self.centroids.clone().detach().cpu().numpy().tofile(centroids_path)
-                self.logger.info('Centroids saved to {}.\n'.format(centroids_path))
-
-            # Evaluate
-            eval_info, f1, conf_preds, init_pseudo = self.test_epoch(loader)
-            self.logger.info(eval_info)
-
-            conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
-            self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
-            conf_preds.tofile(conf_preds_path)
-
-            init_pseudo_path = self.weights_path.replace('.pth', '_init_pseudo.npy')
-            self.logger.info('Saving initial pseudolabels to {}'.format(init_pseudo_path))
-            init_pseudo.tofile(init_pseudo_path)
-
-            return f1
-
+        # Calculate training data centroids first
+        centroids_path = self.weights_path.replace('.pth', '_centroids.npy')
+        if os.path.exists(centroids_path):
+            self.logger.info('Loading centroids from {}.\n'.format(centroids_path))
+            cent_np = np.fromfile(centroids_path, dtype=np.float32).reshape(-1, self.net.feature_dim)
+            self.centroids = torch.from_numpy(cent_np).cuda()
         else:
+            self.logger.info('Calculating training data centroids.\n')
+            self.centroids = self.centroids_cal(self.trainloader)
+            self.centroids.clone().detach().cpu().numpy().tofile(centroids_path)
+            self.logger.info('Centroids saved to {}.\n'.format(centroids_path))
 
-            eval_info, eval_acc_mac, eval_acc_mic = self.validate_epoch(loader)
-            self.logger.info(eval_info)
-            self.logger.info('Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(eval_acc_mac * 100, eval_acc_mic * 100))
+        # Evaluate
+        eval_info, f1, conf_preds, init_pseudo = self.deploy_epoch(loader)
 
-            return eval_acc_mac
+        self.logger.info(eval_info)
+
+        conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
+        self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
+        conf_preds.tofile(conf_preds_path)
+
+        init_pseudo_path = self.weights_path.replace('.pth', '_init_pseudo.npy')
+        self.logger.info('Saving initial pseudolabels to {}'.format(init_pseudo_path))
+        init_pseudo.tofile(init_pseudo_path)
+
+        return f1
+
+
+
 
 
 

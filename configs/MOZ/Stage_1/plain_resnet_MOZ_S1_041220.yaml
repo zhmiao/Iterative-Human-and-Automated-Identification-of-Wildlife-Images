@@ -1,22 +1,24 @@
 # training
-conf_id: 040120_S2_CROP_spALL
-algorithm: PlainStage2
-num_epochs: 30
+conf_id: 041220_MOZ_S1
+algorithm: PlainStage1
+num_epochs: 40
 log_interval: 10
+limit_steps: 0
 
 # data
 dataset_root: /home/zhmiao/datasets/ecology
-dataset_name: CCT_CIS_CROP_S2
-deploy_dataset_name: CCT_CIS_CROP_S2
-class_indices: CCT_S2
+dataset_name: MOZ_S1
+deploy_dataset_name: MOZ_S2
+class_indices: MOZ_S1
+train_transform: MOZ
 train_split:  # Set to blank for full dataset
 batch_size: 64
-num_workers: 4
+num_workers: 8
 
 # model
 model_name: PlainResNetClassifier
 num_layers: 50
-weights_init: ./weights/PlainStage1/032620_S1_CROP_spALL_0.pth
+weights_init: ImageNet
 
 # optim
 ## feature
@@ -28,7 +30,7 @@ lr_classifier: 0.01
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
 ## lr_scheduler
-step_size: 10
+step_size: 15
 gamma: 0.1
 
 # confidence
