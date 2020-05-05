@@ -233,6 +233,16 @@ class MOZ_S2(MOZ_ST2):
             self.data_split()
 
 
+@register_dataset_obj('MOZ_S2_LEFTOUT')
+class MOZ_S2_LEFTOUT(MOZ):
+
+    name = 'MOZ_S2_LEFTOUT'
+
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(MOZ_S2_LEFTOUT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                             split=split, transform=transform)
+        ann_dir = os.path.join(self.ann_root, 'test_mix_season_2_with_leftout.txt')
+        self.load_data(ann_dir)
 
 
 

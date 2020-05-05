@@ -59,10 +59,12 @@ with Pool(30) as p:
     p.map(img_resize, all_files, chunksize=2000)
 
 # %% codecell
-images = glob(os.path.join(save_root, '**/*.JPG'), recursive=True)
+resized_images = glob(os.path.join(save_root, '**/*.JPG'), recursive=True)
 
 # %% codecell
-resized_list = open(os.path.join(root, 'Mozambique', 'SplitLists' 'Mozambique_season_3_all.txt'), 'r')
+resized_list = open(os.path.join(root, 'Mozambique', 'SplitLists', 'Mozambique_season_3_all.txt'), 'w')
 
-for f in tqdm(images):
+for f in tqdm(resized_images):
     resized_list.write(f.replace(save_root + '/', '') + '\n')
+
+resized_list.close()
