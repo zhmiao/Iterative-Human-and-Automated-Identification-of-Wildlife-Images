@@ -2,10 +2,10 @@
 conf_id: 042020_MOZ_S2
 algorithm: MemoryStage2
 num_epochs: 40
-hall_warm_up_epochs: 1
-mem_warm_up_epochs: 5
+hall_warm_up_epochs: 3
+mem_warm_up_epochs: 10
 log_interval: 10
-limit_steps: 1
+limit_steps:  0
 
 # data
 dataset_root: /home/zhmiao/datasets/ecology
@@ -37,7 +37,7 @@ lr_memory: 0.01
 momentum_memory: 0.9
 weight_decay_memory: 0.0005
 ## lr_scheduler
-step_size: 10
+step_size: 15
 gamma: 0.1
 
 # center loss weight
