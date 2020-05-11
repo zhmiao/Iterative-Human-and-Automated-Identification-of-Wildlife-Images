@@ -166,12 +166,12 @@ class MOZ_S1_ORI(MOZ_ORI):
 class MOZ_ST2(MOZ):
 
     def __init__(self, rootdir, class_indices, dset='train', split=None,
-                 transform=None, conf_preds=None, unknown_only=False):
+                 transform=None, conf_preds=None, unconf_only=False):
 
         super(MOZ_ST2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, split=split,
                                       transform=transform)
         self.conf_preds = conf_preds
-        self.unknown_only = unknown_only
+        self.unconf_only = unconf_only
         if self.conf_preds is not None:
             print('Confidence prediction is not NONE.\n')
 
@@ -186,8 +186,8 @@ class MOZ_ST2(MOZ):
                 ann_counts[l] = temp_dic[l]
         return ann_counts
 
-    def pick_unknown(self):
-        print('** PICKING UNKNOWN DATA ONLY **')
+    def pick_unconf(self):
+        print('** PICKING UNCONFIDENT DATA ONLY **')
         data = np.array(self.data)
         labels = np.array(self.labels)
         conf_preds = np.array(self.conf_preds)
@@ -219,16 +219,16 @@ class MOZ_S2(MOZ_ST2):
     name = 'MOZ_S2'
 
     def __init__(self, rootdir, class_indices, dset='train', split=None,
-                 transform=None, conf_preds=None, unknown_only=False):
+                 transform=None, conf_preds=None, unconf_only=False):
         super(MOZ_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                      split=split, transform=transform, conf_preds=conf_preds,
-                                     unknown_only=unknown_only)
+                                     unconf_only=unconf_only)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
         ann_dir = os.path.join(self.ann_root, '{}_mix_season_2.txt'.format(self.dset))
         self.load_data(ann_dir)
-        if unknown_only:
-            self.pick_unknown()
+        if unconf_only:
+            self.pick_unconf()
         if split is not None:
             self.data_split()
 

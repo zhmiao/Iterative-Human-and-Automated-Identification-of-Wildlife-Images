@@ -191,11 +191,11 @@ class CCT_CIS_CROP_S1(CCT_CROP):
 class CCT_CROP_ST2(CCT_CROP):
 
     def __init__(self, rootdir, class_indices, dset='train', split=None,
-                 transform=None, conf_preds=None, unknown_only=False):
+                 transform=None, conf_preds=None, unconf_only=False):
         super(CCT_CROP_ST2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, split=split,
                                            transform=transform)
         self.conf_preds = conf_preds
-        self.unknown_only = unknown_only
+        self.unconf_only = unconf_only
         if self.conf_preds is not None:
             print('Confidence prediction is not NONE.\n')
 
@@ -210,7 +210,7 @@ class CCT_CROP_ST2(CCT_CROP):
                 ann_counts[l] = temp_dic[l]
         return ann_counts
 
-    def pick_unknown(self):
+    def pick_unconf(self):
         print('** PICKING UNKNOWN DATA ONLY **')
         data = np.array(self.data)
         labels = np.array(self.labels)
@@ -249,14 +249,14 @@ class CCT_CIS_CROP_S2(CCT_CROP_ST2):
     name = 'CCT_CIS_CROP_S2'
 
     def __init__(self, rootdir, class_indices, dset='train', split=None,
-                 transform=None, conf_preds=None, unknown_only=False):
+                 transform=None, conf_preds=None, unconf_only=False):
         super(CCT_CIS_CROP_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                               split=split, transform=transform, conf_preds=conf_preds,
-                                              unknown_only=unknown_only)
+                                              unconf_only=unconf_only)
         ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_2.json'.format(dset))
         self.load_data(ann_dir)
-        if unknown_only:
-            self.pick_unknown()
+        if unconf_only:
+            self.pick_unconf()
         if split is not None:
             self.data_split()
 
@@ -267,18 +267,18 @@ class CCT_TRANS_CROP(CCT_CROP_ST2):
     name = 'CCT_TRANS_CROP'
 
     def __init__(self, rootdir, class_indices, dset='train', split=None,
-                 transform=None, conf_preds=None, unknown_only=False):
+                 transform=None, conf_preds=None, unconf_only=False):
         super(CCT_TRANS_CROP, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                              split=split, transform=transform, conf_preds=conf_preds,
-                                             unknown_only=unknown_only)
+                                             unconf_only=unconf_only)
         if self.dset == 'train':
             ann_dir = os.path.join(self.ann_root, 'cis_{}_annotations_season_2.json'.format(dset))
         else:
             ann_dir = os.path.join(self.ann_root, 'trans_{}_annotations.json'.format(dset))
 
         self.load_data(ann_dir)
-        if unknown_only:
-            self.pick_unknown()
+        if unconf_only:
+            self.pick_unconf()
         if split is not None:
             self.data_split()
 

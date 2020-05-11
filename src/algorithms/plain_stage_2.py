@@ -15,7 +15,7 @@ from src.models.utils import get_model
 from .plain_resnet import FineTuneResNet
 
 
-def load_data(args, conf_preds, unknown_only=False):
+def load_data(args, conf_preds, unconf_only=False):
 
     """
     Dataloading function. This function can change alg by alg as well.
@@ -36,7 +36,7 @@ def load_data(args, conf_preds, unknown_only=False):
                                num_workers=args.num_workers,
                                sampler=None,
                                conf_preds=conf_preds,
-                               unknown_only=unknown_only)
+                               unconf_only=unconf_only)
 
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
@@ -49,7 +49,7 @@ def load_data(args, conf_preds, unknown_only=False):
                               num_workers=args.num_workers,
                               sampler=None,
                               conf_preds=None,
-                              unknown_only=False)
+                              unconf_only=False)
 
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
@@ -62,7 +62,7 @@ def load_data(args, conf_preds, unknown_only=False):
                              num_workers=args.num_workers,
                              sampler=None,
                              conf_preds=None,
-                             unknown_only=False)
+                             unconf_only=False)
 
     deployloader = load_dataset(name=args.deploy_dataset_name,
                                 class_indices=cls_idx,
@@ -102,7 +102,7 @@ class PlainStage2(Algorithm):
         # Setup data for training and testing #
         #######################################
         self.trainloader, self.testloader, \
-        self.valloader, self.deployloader = load_data(args, self.conf_preds, unknown_only=True)
+        self.valloader, self.deployloader = load_data(args, self.conf_preds, unconf_only=True)
         self.train_unique_labels, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):
