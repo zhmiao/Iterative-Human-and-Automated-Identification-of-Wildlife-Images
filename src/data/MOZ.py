@@ -1,6 +1,9 @@
 import os
-from PIL import Image
+import random
+from PIL import Image, ImageFilter
 import numpy as np
+from copy import deepcopy
+
 from torch.utils.data import Dataset
 
 from .utils import register_dataset_obj, BaseDataset
@@ -166,33 +169,80 @@ class MOZ_S1_ORI(MOZ_ORI):
 class MOZ_ST2(MOZ):
 
     def __init__(self, rootdir, class_indices, dset='train', split=None,
-                 transform=None, conf_preds=None, unconf_only=False):
+                 transform=None, conf_preds=None, pseudo_labels=None, unconf_only=False, blur=False):
 
         super(MOZ_ST2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, split=split,
                                       transform=transform)
         self.conf_preds = conf_preds
+        self.pseudo_labels = pseudo_labels
         self.unconf_only = unconf_only
+        self.blur = blur
+        if self.blur:
+            print('** USING BLURING **')
         if self.conf_preds is not None:
             print('Confidence prediction is not NONE.\n')
 
     def class_counts_cal_ann(self):
-        unique_labels = np.unique(self.labels)
-        unique_ann, unique_ann_counts = np.unique(np.array(self.labels)[np.array(self.conf_preds) == 0],
-                                                  return_counts=True)
-        temp_dic = {l: c for l, c in zip(unique_ann, unique_ann_counts)}
-        ann_counts = np.array([0 for _ in range(len(unique_labels))])
-        for l in unique_labels:
-            if l in temp_dic:
-                ann_counts[l] = temp_dic[l]
-        return ann_counts
+
+        if self.unconf_only:
+            _, ann_counts = self.class_counts_cal()
+            return ann_counts
+
+        else:
+            unique_labels = np.unique(self.labels)
+            unique_ann, unique_ann_counts = np.unique(np.array(self.labels)[np.array(self.conf_preds) == 0],
+                                                      return_counts=True)
+            temp_dic = {l: c for l, c in zip(unique_ann, unique_ann_counts)}
+            ann_counts = np.array([0 for _ in range(len(unique_labels))])
+            for l in unique_labels:
+                if l in temp_dic:
+                    ann_counts[l] = temp_dic[l]
+            return ann_counts
 
     def pick_unconf(self):
-        print('** PICKING UNCONFIDENT DATA ONLY **')
+        print('** PICKING GROUND TRUTHED DATA **')
         data = np.array(self.data)
         labels = np.array(self.labels)
         conf_preds = np.array(self.conf_preds)
         self.data = list(data[conf_preds == 0])
         self.labels = list(labels[conf_preds == 0])
+
+    def pick_conf(self):
+        print('** PICKING PSEUDO LABLED DATA **')
+        data = np.array(self.data)
+        labels = np.array(self.labels)
+        conf_preds = np.array(self.conf_preds)
+        self.data = list(data[conf_preds == 1])
+        self.labels = list(labels[conf_preds == 1])
+
+    def pseudo_label_accuracy(self):
+        pseudo_labels = np.array(self.pseudo_labels)
+        labels = np.array(self.labels)
+        print('** CHECKING PSEUDO LABEL ACCURACY **')
+        conf_pseudo_labels = pseudo_labels[pseudo_labels != -1]
+        conf_labels = labels[pseudo_labels != -1]
+        acc = ((conf_pseudo_labels == conf_labels).sum() / len(conf_labels)).mean()
+        print('PSEUDO LABEL ACCURACY: {:3f}'.format(acc * 100))
+
+    def pseudo_label_selection(self):
+
+        conf_preds = np.array(self.conf_preds)
+        pseudo_labels = np.array(self.pseudo_labels)
+        labels = np.array(self.labels)
+        data = np.array(self.data)
+
+        self.pseudo_label_accuracy()
+
+        print('** INFUSING PSEUDO LABELS AND SELECTING DATA **')
+
+        labels[conf_preds == 1] = pseudo_labels[conf_preds == 1]
+
+        # Pick data first then labels
+        data = data[labels != -1]
+        labels = labels[labels != -1]
+
+        self.labels = list(labels)
+        self.data = list(data)
 
     def __getitem__(self, index):
 
@@ -202,6 +252,9 @@ class MOZ_ST2(MOZ):
 
         with open(file_dir, 'rb') as f:
             sample = Image.open(f).convert('RGB')
+            if self.blur:
+                blur_r = random.randint(0, 12) / 10
+                sample = sample.filter(ImageFilter.GaussianBlur(radius=blur_r))
 
         if self.transform is not None:
             sample = self.transform(sample)
@@ -219,10 +272,10 @@ class MOZ_S2(MOZ_ST2):
     name = 'MOZ_S2'
 
     def __init__(self, rootdir, class_indices, dset='train', split=None,
-                 transform=None, conf_preds=None, unconf_only=False):
+                 transform=None, conf_preds=None, pseudo_labels=None, unconf_only=False):
         super(MOZ_S2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                      split=split, transform=transform, conf_preds=conf_preds,
-                                     unconf_only=unconf_only)
+                                     pseudo_labels=pseudo_labels, unconf_only=unconf_only)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
         ann_dir = os.path.join(self.ann_root, '{}_mix_season_2.txt'.format(self.dset))
@@ -231,6 +284,41 @@ class MOZ_S2(MOZ_ST2):
             self.pick_unconf()
         if split is not None:
             self.data_split()
+        if pseudo_labels is not None:
+            # TODO: Check this function!!!
+            self.pseudo_label_selection()
+
+@register_dataset_obj('MOZ_S2_GTPS')
+class MOZ_S2_GTPS(MOZ_ST2):
+
+    name = 'MOZ_S2_GTPS'
+
+    def __init__(self, rootdir, class_indices, dset='train', split=None,
+                 transform=None, conf_preds=None, pseudo_labels=None, GTPS_mode='both', blur=False):
+        super(MOZ_S2_GTPS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                          split=split, transform=transform, conf_preds=conf_preds,
+                                          pseudo_labels=pseudo_labels, blur=blur)
+        if self.dset == 'val':
+            self.dset = 'test'  # MOZ does not use val for now.
+
+        ann_dir = os.path.join(self.ann_root, '{}_mix_season_2.txt'.format(self.dset))
+
+        self.load_data(ann_dir)
+
+        if GTPS_mode == 'both':
+            print('** LOADING BOTH GROUND TRUTH AND PSEUDO LABELS **')
+            assert pseudo_labels is not None
+            self.pseudo_label_selection()
+        elif GTPS_mode == 'GT':
+            print('** LOADING ONLY GROUND TRUTH **')
+            self.pick_unconf()
+        elif GTPS_mode == 'PS':
+            print('** LOADING ONLY PSEUDO LABELS **')
+            assert pseudo_labels is not None
+            self.pseudo_label_selection()
+            self.pick_conf()
+        elif GTPS_mode is None:
+            print('** NOT USING GTPS MODES **')
 
 
 @register_dataset_obj('MOZ_S2_LEFTOUT')

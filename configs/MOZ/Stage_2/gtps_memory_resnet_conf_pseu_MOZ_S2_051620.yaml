@@ -1,22 +1,21 @@
 # training
-conf_id: 042020_MOZ_S2
-algorithm: MemoryStage2_ConfPseu
-num_epochs: 40
-hall_warm_up_epochs: 1
-mem_warm_up_epochs: 2
+conf_id: 051620_MOZ_S2
+algorithm: GTPSMemoryStage2_ConfPseu
+hall_warm_up_epochs: 20
+oltr_epochs: 30
 log_interval: 10
-limit_steps:  1
+limit_steps: 1
 
 # data
 dataset_root: /home/zhmiao/datasets/ecology
-dataset_name: MOZ_S2
+dataset_name: MOZ_S2_GTPS
 deploy_dataset_name: MOZ_S3_NEP
 class_indices: MOZ_S2
 train_transform: MOZ
 train_split:  # Set to blank for full dataset
-batch_size: 64
+batch_size: 96
 num_workers: 8
-num_samples_cls: 4
+num_samples_cls: 2
 
 # model
 model_name: MemoryResNetClassifier
@@ -33,14 +32,11 @@ lr_classifier: 0.01
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
 ## memory
-lr_memory: 0.001
+lr_memory: 0.0001
 momentum_memory: 0.9
 weight_decay_memory: 0.0005
 ## lr_scheduler
-sch_type: warm
-decay1: 15
-decay2: 25
-sch_warmup: 3
+step_size: 10
 gamma: 0.1
 
 # center loss weight
@@ -51,6 +47,4 @@ reachability_scale: 10.0
 
 # confidence
 theta: 0.9
-
-
 

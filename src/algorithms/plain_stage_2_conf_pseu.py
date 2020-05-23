@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import copy
 from datetime import datetime
 from tqdm import tqdm
 
@@ -7,15 +8,13 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_2_metric, acc
+from .utils import register_algorithm, Algorithm, stage_2_metric, acc, WarmupScheduler
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
 
-from .plain_resnet import FineTuneResNet
 
-
-def load_data(args, conf_preds, unconf_only=False):
+def load_data(args, conf_preds, unconf_only=False, pseudo_labels=None):
 
     """
     Dataloading function. This function can change alg by alg as well.
@@ -36,6 +35,7 @@ def load_data(args, conf_preds, unconf_only=False):
                                num_workers=args.num_workers,
                                cas_sampler=False,
                                conf_preds=conf_preds,
+                               pseudo_labels=pseudo_labels,
                                unconf_only=unconf_only)
 
     testloader = load_dataset(name=args.dataset_name,
@@ -78,32 +78,61 @@ def load_data(args, conf_preds, unconf_only=False):
     return trainloader, testloader, valloader, deployloader
 
 
-@register_algorithm('PlainStage2')
-class PlainStage2(Algorithm):
+@register_algorithm('PlainStage2_ConfPseu')
+class PlainStage2_ConfPseu(Algorithm):
 
     """
     Overall training function.
     """
 
-    name = 'PlainStage2'
+    name = 'PlainStage2_ConfPseu'
     net = None
     opt_net = None
     scheduler = None
 
     def __init__(self, args):
-        super(PlainStage2, self).__init__(args=args)
+        super(PlainStage2_ConfPseu, self).__init__(args=args)
+
+        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
 
         # Training epochs and logging intervals
         self.num_epochs = args.num_epochs
         self.log_interval = args.log_interval
         self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
+        # self.stage_1_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'), dtype=np.float32)
+
+        self.pseudo_labels = list(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'), dtype=np.int))
+
+        # TODO: Check pseudo_labels accuracy!!!
 
         #######################################
         # Setup data for training and testing #
         #######################################
         self.trainloader, self.testloader, \
-        self.valloader, self.deployloader = load_data(args, self.conf_preds, unconf_only=True)
+        self.valloader, self.deployloader = load_data(args, self.conf_preds, unconf_only=False,
+                                                      pseudo_labels=self.pseudo_labels)
         self.train_unique_labels, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
+        self.train_annotation_counts = self.trainloader.dataset.class_counts_cal_ann()
+
+    def reset_trainloader(self):
+
+        self.logger.info('\nReseting training loader and sampler with pseudo labels.')
+
+        cls_idx = class_indices[self.args.class_indices]
+
+        self.trainloader_up = load_dataset(name=self.args.dataset_name,
+                                           class_indices=cls_idx,
+                                           dset='train',
+                                           transform='train',
+                                           split=None,
+                                           rootdir=self.args.dataset_root,
+                                           batch_size=self.args.batch_size,
+                                           shuffle=False,
+                                           num_workers=self.args.num_workers,
+                                           cas_sampler=True,
+                                           conf_preds=self.conf_preds,
+                                           pseudo_labels=self.pseudo_labels,
+                                           unconf_only=False)
 
     def set_train(self):
         ###########################
@@ -213,6 +242,12 @@ class PlainStage2(Algorithm):
                 best_acc = val_acc_mac
                 best_epoch = epoch
 
+            # # TODO!!!
+            # if epoch >= self.args.mem_warm_up_epochs:
+            #     self.logger.info('\nGenerating new pseudo labels.')
+            #     self.pseudo_labels = self.evaluate_epoch(self.trainloader_no_up, pseudo_label_gen=True)
+            #     self.reset_trainloader()
+
         self.logger.info('\nBest Model Appears at Epoch {}...'.format(best_epoch))
         self.save_model()
 
@@ -290,6 +325,41 @@ class PlainStage2(Algorithm):
 
         return eval_info, class_acc.mean()
 
+    def centroids_cal(self, loader, use_pseudo=False):
+
+        self.net.eval()
+
+        centroids = torch.zeros(len(class_indices[self.args.class_indices]),
+                                self.net.feature_dim).cuda()
+
+        with torch.set_grad_enabled(False):
+
+            # TODO: use pseudo labels for initial centroids generation
+            for batch in tqdm(loader, total=len(loader)):
+
+                if loader == self.trainloader_no_up:
+                    data, labels, confs, indices = batch
+                else:
+                    data, labels = batch
+
+                # setup data
+                data, labels = data.cuda(), labels.cuda()
+                data.requires_grad = False
+                labels.requires_grad = False
+                # forward
+                feats = self.net.feature(data)
+                # Add all calculated features to center tensor
+                for i in range(len(labels)):
+                    label = labels[i]
+                    centroids[label] += feats[i]
+
+        # Get data counts
+        _, loader_class_counts = loader.dataset.class_counts_cal()
+        # Average summed features with class count
+        centroids /= torch.tensor(loader_class_counts).float().unsqueeze(1).cuda()
+
+        return centroids
+
     def evaluate(self, loader):
         eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
@@ -305,3 +375,4 @@ class PlainStage2(Algorithm):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
         self.logger.info('Saving to {}'.format(self.weights_path))
         self.net.save(self.weights_path)
+

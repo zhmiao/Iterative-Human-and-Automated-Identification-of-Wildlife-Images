@@ -44,7 +44,7 @@ class MemoryResNetClassifier(BaseModule):
 
     def setup_net(self):
 
-        kwargs = {}
+        kwargs = {'use_modulatedatt': True, 'use_fc': False}
 
         if self.num_layers == 18:
             block = BasicBlock

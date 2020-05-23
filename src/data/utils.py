@@ -5,12 +5,23 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
+from src.data.class_aware_sampler import ClassAwareSampler
+
 # Standard data transform with resize and typical augmentation
 data_transforms = {
     'train': transforms.Compose([
         # transforms.RandomResizedCrop(224, scale=(0.5, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
         transforms.RandomResizedCrop(224, scale=(0.08, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
         transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ]),
+    'train_strong': transforms.Compose([
+        transforms.RandomGrayscale(p=0.1),
+        transforms.RandomResizedCrop(224, scale=(0.08, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(45, fill=(123, 116, 103)),
         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -61,7 +72,7 @@ def get_dataset(name, rootdir, class_indices, dset, transform, split, **add_args
 
 
 def load_dataset(name, class_indices, dset, transform, split, batch_size=64, rootdir='',
-                 shuffle=True, num_workers=1, sampler=None, **add_args):
+                 shuffle=True, num_workers=1, cas_sampler=False, **add_args):
 
     """
     Dataset loader
@@ -77,8 +88,10 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
     if len(dataset) == 0:
         return None
 
-    if sampler is not None:
-        print("** USING SAMPLER!! **")
+    if cas_sampler:
+        print("** USING CAS SAMPLER!! **")
+        # TODO, sampler numbers
+        sampler = ClassAwareSampler(dataset.labels, 3)
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
                             num_workers=num_workers, pin_memory=True,
                             sampler=sampler)

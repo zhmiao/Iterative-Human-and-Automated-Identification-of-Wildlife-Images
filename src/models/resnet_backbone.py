@@ -1,14 +1,17 @@
 # Official ResNet Implementation
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.models.resnet import conv1x1, BasicBlock, Bottleneck, model_urls
+
+from src.models.modulated_attention import ModulatedAttLayer
 
 
 class ResNetFeature(nn.Module):
 
     def __init__(self, block, layers, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None):
+                 norm_layer=None, use_modulatedatt=False, use_fc=False):
 
         super(ResNetFeature, self).__init__()
 
@@ -45,6 +48,16 @@ class ResNetFeature(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+        self.use_fc = use_fc
+        if self.use_fc:
+            print('Using fc.')
+            self.fc_add = nn.Linear(512 * block.expansion, 512)
+
+        self.use_modulatedatt = use_modulatedatt
+        if self.use_modulatedatt:
+            print('Using self attention.')
+            self.modulatedatt = ModulatedAttLayer(in_channels=512 * block.expansion)
 
         ########################
         # Model initialization #
@@ -101,7 +114,13 @@ class ResNetFeature(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
+        if self.use_modulatedatt:
+            x, _ = self.modulatedatt(x)
+
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
+
+        if self.use_fc:
+            x = F.relu(self.fc_add(x))
 
         return x
