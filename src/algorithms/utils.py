@@ -207,6 +207,8 @@ def unknown_metrics(preds, labels):
         # record all unconfident samples
         total_unknown += 1
 
+    breakpoint()
+
     percent_unknown = correct_unknown / total_unknown
 
     return percent_unknown
