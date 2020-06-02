@@ -8,14 +8,13 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_2_metric, acc
+from .utils import register_algorithm, Algorithm, stage_2_metric, acc, WarmupScheduler
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
-from src.data.class_aware_sampler import ClassAwareSampler
 from src.models.utils import get_model
 
 
-def load_data(args, conf_preds, unconf_only=False):
+def load_data(args, conf_preds, unconf_only=False, pseudo_labels=None):
 
     """
     Dataloading function. This function can change alg by alg as well.
@@ -34,9 +33,41 @@ def load_data(args, conf_preds, unconf_only=False):
                                      batch_size=args.batch_size,
                                      shuffle=False,
                                      num_workers=args.num_workers,
-                                     sampler=None,
+                                     cas_sampler=False,
                                      conf_preds=conf_preds,
-                                     unconf_only=unconf_only)
+                                     pseudo_labels=None,
+                                     unconf_only=True)
+                                     # conf_preds=conf_preds,
+                                     # pseudo_labels=pseudo_labels,
+                                     # unconf_only=unconf_only)
+
+    # trainloader_up = load_dataset(name=args.dataset_name,
+    #                               class_indices=cls_idx,
+    #                               dset='train',
+    #                               transform='train',
+    #                               split=args.train_split,
+    #                               rootdir=args.dataset_root,
+    #                               batch_size=args.batch_size,
+    #                               shuffle=False,
+    #                               num_workers=args.num_workers,
+    #                               cas_sampler=True,
+    #                               conf_preds=conf_preds,
+    #                               pseudo_labels=pseudo_labels,
+    #                               unconf_only=unconf_only)
+
+    trainloader_up = load_dataset(name=args.dataset_name,
+                                  class_indices=cls_idx,
+                                  dset='train',
+                                  transform='train',
+                                  split=args.train_split,
+                                  rootdir=args.dataset_root,
+                                  batch_size=args.batch_size,
+                                  shuffle=True,
+                                  num_workers=args.num_workers,
+                                  cas_sampler=False,
+                                  conf_preds=conf_preds,
+                                  pseudo_labels=None,
+                                  unconf_only=True)
 
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
@@ -47,8 +78,9 @@ def load_data(args, conf_preds, unconf_only=False):
                               batch_size=args.batch_size,
                               shuffle=False,
                               num_workers=args.num_workers,
-                              sampler=None,
+                              cas_sampler=False,
                               conf_preds=None,
+                              pseudo_labels=None,
                               unconf_only=False)
 
     valloader = load_dataset(name=args.dataset_name,
@@ -60,8 +92,9 @@ def load_data(args, conf_preds, unconf_only=False):
                              batch_size=args.batch_size,
                              shuffle=False,
                              num_workers=args.num_workers,
-                             sampler=None,
+                             cas_sampler=False,
                              conf_preds=None,
+                             pseudo_labels=None,
                              unconf_only=False)
 
     deployloader = load_dataset(name=args.deploy_dataset_name,
@@ -73,25 +106,25 @@ def load_data(args, conf_preds, unconf_only=False):
                                 batch_size=args.batch_size,
                                 shuffle=False,
                                 num_workers=args.num_workers,
-                                sampler=None)
+                                cas_sampler=False)
 
-    return trainloader_no_up, testloader, valloader, deployloader
+    return trainloader_no_up, trainloader_up, testloader, valloader, deployloader
 
 
-@register_algorithm('MemoryStage2')
-class MemoryStage2(Algorithm):
+@register_algorithm('MemoryStage2_ConfPseu')
+class MemoryStage2_ConfPseu(Algorithm):
 
     """
     Overall training function.
     """
 
-    name = 'MemoryStage2'
+    name = 'MemoryStage2_ConfPseu'
     net = None
     opt_net = None
     scheduler = None
 
     def __init__(self, args):
-        super(MemoryStage2, self).__init__(args=args)
+        super(MemoryStage2_ConfPseu, self).__init__(args=args)
 
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
 
@@ -100,34 +133,18 @@ class MemoryStage2(Algorithm):
         self.log_interval = args.log_interval
         self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
         self.stage_1_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'), dtype=np.float32)
-        self.pseudo_labels = torch.from_numpy(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'),
-                                                          dtype=np.int))
+        # self.pseudo_labels = None
+        self.pseudo_labels = list(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'), dtype=np.int))
 
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader_no_up, self.testloader, \
-        self.valloader, self.deployloader = load_data(args, self.conf_preds, unconf_only=False)
+        self.trainloader_no_up, self.trainloader_up, self.testloader, \
+        self.valloader, self.deployloader = load_data(args, self.conf_preds, unconf_only=False,
+                                                      pseudo_labels=self.pseudo_labels)
+
         self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
         self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
-
-        self.trainloader_up = None
-
-        # # TODO!!!
-        # self.pseudo_labels = torch.tensor(self.trainloader_no_up.dataset.labels)
-        cls_idx = class_indices[self.args.class_indices]
-        self.trainloader_up = load_dataset(name=self.args.dataset_name,
-                                           class_indices=cls_idx,
-                                           dset='train',
-                                           transform='train',
-                                           split=None,
-                                           rootdir=self.args.dataset_root,
-                                           batch_size=self.args.batch_size,
-                                           shuffle=True,
-                                           num_workers=self.args.num_workers,
-                                           sampler=None,
-                                           conf_preds=self.conf_preds,
-                                           unconf_only=False)
 
         if args.limit_steps:
             self.logger.info('** LIMITING STEPS!!! **')
@@ -136,11 +153,11 @@ class MemoryStage2(Algorithm):
             self.max_batch = None
 
     def reset_trainloader(self):
+
         self.logger.info('\nReseting training loader and sampler with pseudo labels.')
-        # TODO!!!!
-        # self.infuse_pseudo_labels()
+
         cls_idx = class_indices[self.args.class_indices]
-        sampler = ClassAwareSampler(labels=self.pseudo_labels, num_samples_cls=self.args.num_samples_cls)
+
         self.trainloader_up = load_dataset(name=self.args.dataset_name,
                                            class_indices=cls_idx,
                                            dset='train',
@@ -150,14 +167,10 @@ class MemoryStage2(Algorithm):
                                            batch_size=self.args.batch_size,
                                            shuffle=False,
                                            num_workers=self.args.num_workers,
-                                           sampler=sampler,
+                                           cas_sampler=True,
                                            conf_preds=self.conf_preds,
+                                           pseudo_labels=self.pseudo_labels,
                                            unconf_only=False)
-
-    def infuse_pseudo_labels(self):
-        # infuse pseudo_labels with ground truth labels for unconfident predictions
-        self.pseudo_labels[np.array(self.conf_preds) == 0] \
-            = copy.deepcopy(torch.tensor(self.trainloader_no_up.dataset.labels)[np.array(self.conf_preds) == 0])
 
     def set_train(self):
         ###########################
@@ -177,10 +190,12 @@ class MemoryStage2(Algorithm):
         else:
             self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
             stage_1_memory = self.stage_1_mem_flat.reshape(-1, self.net.feature_dim)
-            initial_centroids = self.centroids_cal(self.trainloader_no_up).clone().detach().cpu().numpy()
+            initial_centroids = self.centroids_cal(self.trainloader_no_up, use_pseudo=True).clone().detach().cpu().numpy()
             initial_centroids[:len(stage_1_memory)] = stage_1_memory
             initial_centroids.tofile(initial_centroids_path)
             self.logger.info('\nInitial centroids saved to {}.'.format(initial_centroids_path))
+
+        # TODO: Check if ground truth labels have all classes included!!!!!!!!!!
 
         # Intitialize centroids using named parameter to avoid possible bugs
         with torch.no_grad():
@@ -197,36 +212,41 @@ class MemoryStage2(Algorithm):
                                      'lr': self.args.lr_feature,
                                      'momentum': self.args.momentum_feature,
                                      'weight_decay': self.args.weight_decay_feature}])
-        self.sch_feats = optim.lr_scheduler.StepLR(self.opt_feats, step_size=self.args.step_size,
-                                                   gamma=self.args.gamma)
+        self.sch_feats = WarmupScheduler(self.opt_feats, decay1=self.args.decay1, decay2=self.args.decay2,
+                                         gamma=self.args.gamma, len_epoch=len(self.trainloader_no_up),
+                                         warmup_epochs=self.args.sch_warmup)
 
         self.opt_fc_hall = optim.SGD([{'params': self.net.fc_hallucinator.parameters(),
                                        'lr': self.args.lr_classifier,
                                        'momentum': self.args.momentum_classifier,
                                        'weight_decay': self.args.weight_decay_classifier}])
-        self.sch_fc_hall = optim.lr_scheduler.StepLR(self.opt_fc_hall, step_size=self.args.step_size,
-                                                     gamma=self.args.gamma)
+        self.sch_fc_hall = WarmupScheduler(self.opt_fc_hall, decay1=self.args.decay1, decay2=self.args.decay2,
+                                           gamma=self.args.gamma, len_epoch=len(self.trainloader_no_up),
+                                           warmup_epochs=self.args.sch_warmup)
 
         self.opt_fc_sel = optim.SGD([{'params': self.net.fc_selector.parameters(),
                                       'lr': self.args.lr_classifier,
                                       'momentum': self.args.momentum_classifier,
                                       'weight_decay': self.args.weight_decay_classifier}])
-        self.sch_fc_sel = optim.lr_scheduler.StepLR(self.opt_fc_sel, step_size=self.args.step_size,
-                                                    gamma=self.args.gamma)
+        self.sch_fc_sel = WarmupScheduler(self.opt_fc_sel, decay1=self.args.decay1, decay2=self.args.decay2,
+                                          gamma=self.args.gamma, len_epoch=len(self.trainloader_no_up),
+                                          warmup_epochs=self.args.sch_warmup)
 
         self.opt_cos_clf = optim.SGD([{'params': self.net.cosnorm_classifier.parameters(),
                                        'lr': self.args.lr_classifier,
                                        'momentum': self.args.momentum_classifier,
                                        'weight_decay': self.args.weight_decay_classifier}])
-        self.sch_cos_clf = optim.lr_scheduler.StepLR(self.opt_cos_clf, step_size=self.args.step_size,
-                                                     gamma=self.args.gamma)
+        self.sch_cos_clf = WarmupScheduler(self.opt_cos_clf, decay1=self.args.decay1, decay2=self.args.decay2,
+                                           gamma=self.args.gamma, len_epoch=len(self.trainloader_no_up),
+                                           warmup_epochs=self.args.sch_warmup)
 
         self.opt_mem = optim.SGD([{'params': self.net.criterion_ctr.parameters(),
                                    'lr': self.args.lr_memory,
                                    'momentum': self.args.momentum_memory,
                                    'weight_decay': self.args.weight_decay_memory}])
-        self.sch_mem = optim.lr_scheduler.StepLR(self.opt_mem, step_size=self.args.step_size,
-                                                 gamma=self.args.gamma)
+        self.sch_mem = WarmupScheduler(self.opt_mem, decay1=self.args.decay1, decay2=self.args.decay2,
+                                       gamma=self.args.gamma, len_epoch=len(self.trainloader_no_up),
+                                       warmup_epochs=self.args.sch_warmup)
 
     def set_eval(self):
         ###############################
@@ -300,8 +320,6 @@ class MemoryStage2(Algorithm):
             ########################
             # Setup data variables #
             ########################
-            # assign pseudo labels using initial pseudo labels
-            labels[confs == 1] = copy.deepcopy(self.pseudo_labels[indices][confs == 1])
             # assign devices
             data, labels = data.cuda(), labels.cuda()
             data.requires_grad = False
@@ -342,6 +360,12 @@ class MemoryStage2(Algorithm):
 
     def train_memory_epoch(self, epoch):
 
+        self.sch_feats.step()
+        self.sch_fc_hall.step()
+        self.sch_fc_sel.step()
+        self.sch_cos_clf.step()
+        self.sch_mem.step()
+
         self.net.feature.train()
         self.net.fc_hallucinator.train()
         self.net.fc_selector.train()
@@ -351,6 +375,8 @@ class MemoryStage2(Algorithm):
         # N = len(self.trainloader_up)
         if self.max_batch is not None:
             N = self.max_batch
+            if len(self.trainloader_up) < N:
+                N = len(self.trainloader_up)
         else:
             N = len(self.trainloader_up)
 
@@ -367,8 +393,6 @@ class MemoryStage2(Algorithm):
             ########################
             # Setup data variables #
             ########################
-            # assign pseudo labels
-            labels[confs == 1] = copy.deepcopy(self.pseudo_labels[indices][confs == 1])
             # assign devices
             data, labels = data.cuda(), labels.cuda()
             data.requires_grad = False
@@ -415,18 +439,9 @@ class MemoryStage2(Algorithm):
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
                 self.logger.info(info_str)
 
-        self.sch_feats.step()
-        self.sch_fc_hall.step()
-        self.sch_fc_sel.step()
-        self.sch_cos_clf.step()
-        self.sch_mem.step()
-
     def train(self):
 
         for epoch in range(self.args.hall_warm_up_epochs):
-            # Each epoch, reset training loader and sampler with corresponding pseudo labels.
-            # TODO!!!
-            # self.reset_trainloader()
             # Training
             self.train_warm_epoch(epoch)
 
@@ -434,10 +449,6 @@ class MemoryStage2(Algorithm):
         best_acc = 0.
 
         for epoch in range(self.num_epochs):
-
-            # Each epoch, reset training loader and sampler with corresponding pseudo labels.
-            # TODO!!!
-            # self.reset_trainloader()
 
             # Training
             self.train_memory_epoch(epoch)
@@ -452,15 +463,15 @@ class MemoryStage2(Algorithm):
                 best_epoch = epoch
 
             # TODO!!!
-            if epoch >= self.args.mem_warm_up_epochs:
-                self.logger.info('\nGenerating new pseudo labels.')
-                self.pseudo_labels = self.evaluate_epoch(self.trainloader_no_up, pseudo_labels=True)
-                self.reset_trainloader()
+            # if epoch >= self.args.mem_warm_up_epochs:
+            #     self.logger.info('\nGenerating new pseudo labels.')
+            #     self.pseudo_labels = self.evaluate_epoch(self.trainloader_no_up, pseudo_label_gen=True)
+            #     self.reset_trainloader()
 
         self.logger.info('\nBest Model Appears at Epoch {}...'.format(best_epoch))
         self.save_model()
 
-    def evaluate_epoch(self, loader, pseudo_labels=False):
+    def evaluate_epoch(self, loader, pseudo_label_gen=False):
 
         self.net.eval()
 
@@ -495,19 +506,25 @@ class MemoryStage2(Algorithm):
 
                 # calculate probs
                 probs = F.softmax(logits, dim=1)
-                # TODO!!!!
+                max_probs, preds = probs.max(dim=1)
+
+                # calculate top2 prob differences
                 top_2_probs, _ = torch.topk(probs, 2, dim=1)
                 prob_diffs = top_2_probs[:, 0] - top_2_probs[:, 1]
-                max_probs, preds = probs.max(dim=1)
 
                 total_prob_diffs.append(prob_diffs.detach().cpu().numpy())
                 total_preds.append(preds.detach().cpu().numpy())
                 total_max_probs.append(max_probs.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
 
-        if pseudo_labels:
+        if pseudo_label_gen:
 
-            return torch.from_numpy(np.concatenate(total_preds, axis=0))
+            pseudo_labels = np.concatenate(total_preds, axis=0)
+
+            # Set unconfident pseudo labels to -1
+            pseudo_labels[np.concatenate(total_max_probs, axis=0) < self.args.theta] = -1
+
+            return list(pseudo_labels)
 
         else:
 
@@ -564,7 +581,7 @@ class MemoryStage2(Algorithm):
 
             return eval_info, class_acc.mean()
 
-    def centroids_cal(self, loader):
+    def centroids_cal(self, loader, use_pseudo=False):
 
         self.net.eval()
 
@@ -572,7 +589,15 @@ class MemoryStage2(Algorithm):
                                 self.net.feature_dim).cuda()
 
         with torch.set_grad_enabled(False):
-            for data, labels, _, _ in tqdm(loader, total=len(loader)):
+
+            # TODO: use pseudo labels for initial centroids generation
+            for batch in tqdm(loader, total=len(loader)):
+
+                if loader == self.trainloader_no_up:
+                    data, labels, confs, indices = batch
+                else:
+                    data, labels = batch
+
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
                 data.requires_grad = False
