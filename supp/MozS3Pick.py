@@ -76,13 +76,9 @@ cat_sel = cat_list[rand_idx]
 
 # %% codecell
 save_root = os.path.join(root, 'S3_pickout')
-save_root
+os.makedirs(save_root, exist_ok=True)
 
 # %% codecell
-# i = 0
-# file_id = file_id_sel[i]
-# cat = cat_sel[i]
-
 for file_id, cat in tqdm(zip(file_id_sel, cat_sel)):
 
     from_path = os.path.join(root, file_id)
@@ -95,9 +91,5 @@ for file_id, cat in tqdm(zip(file_id_sel, cat_sel)):
         save_path = save_path.replace('.JPG', '_{}.JPG'.format(cat))
     elif '.jpg' in save_path:
         save_path = save_path.replace('.jpg', '_{}.jpg'.format(cat))
-
-    save_path
-
-    os.makedirs(save_path.rsplit('/', 1)[0], exist_ok=True)
 
     copyfile(from_path, save_path)
