@@ -580,7 +580,22 @@ class PlainMemoryStage2_ConfPseu(Algorithm):
         pass
 
     def deploy(self, loader):
-        pass
+        eval_info, preds_conf, preds_unconf = self.deploy_epoch(loader)
+        self.logger.info(eval_info)
+
+        preds_conf_txt_path = self.weights_path.replace('.pth', '_preds_conf.txt')
+        preds_unconf_txt_path = self.weights_path.replace('.pth', '_preds_unconf.txt')
+
+        self.logger.info('Generating confident txt list...\n')
+        with open(preds_conf_txt_path, 'w') as f:
+            for file_id, pred in zip(*preds_conf):
+                f.write('{} {}\n'.format(file_id, pred))
+
+        self.logger.info('Generating unconfident txt list...\n')
+        with open(preds_unconf_txt_path, 'w') as f:
+            for file_id, pred in zip(*preds_unconf):
+                f.write('{} {}\n'.format(file_id, pred))
+
 
     def save_model(self, append=None):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)

@@ -37,7 +37,7 @@ def load_data(args, conf_preds, pseudo_labels=None):
                                      cas_sampler=False,
                                      conf_preds=conf_preds,
                                      pseudo_labels=pseudo_labels,
-                                     GTPS_mode='both')
+                                     GTPS_mode=None)
 
     # For the first couple of epochs, no sampler, no oltr, set shuffle to True, set cas sampler to False
     trainloader_up_gt = load_dataset(name=args.dataset_name,
@@ -184,7 +184,6 @@ class GTPSMemoryStage2_ConfPseu(PlainMemoryStage2_ConfPseu):
                                              pseudo_labels=self.pseudo_labels,
                                              GTPS_mode='PS',
                                              blur=True)
-
 
     def train_warm_epoch(self, epoch):
 
@@ -357,7 +356,6 @@ class GTPSMemoryStage2_ConfPseu(PlainMemoryStage2_ConfPseu):
         self.sch_cos_clf.step()
         self.sch_mem.step()
 
-
     def evaluate_epoch(self, loader, hall=False):
 
         self.net.eval()
@@ -386,7 +384,8 @@ class GTPSMemoryStage2_ConfPseu(PlainMemoryStage2_ConfPseu):
                 else:
                     _, logits, values_nn = self.memory_forward(data)
                     # scale logits with reachability
-                    reachability_logits = (40 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                    # reachability_logits = (40 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                    reachability_logits = (18 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                     logits = reachability_logits * logits
 
                 # compute correct
@@ -404,8 +403,7 @@ class GTPSMemoryStage2_ConfPseu(PlainMemoryStage2_ConfPseu):
                                               np.concatenate(total_max_probs, axis=0),
                                               np.concatenate(total_labels, axis=0),
                                               self.train_unique_labels,
-                                              0.997)
-                                              # self.args.theta)
+                                              self.args.theta)
 
         # Record per class accuracies
         class_acc, mac_acc, mic_acc = acc(np.concatenate(total_preds, axis=0),
@@ -416,7 +414,8 @@ class GTPSMemoryStage2_ConfPseu(PlainMemoryStage2_ConfPseu):
 
         for i in range(len(self.train_unique_labels)):
             if i not in missing_cls_in_test:
-                eval_info += 'Class {} (train counts {}): '.format(i, self.train_class_counts[i])
+                eval_info += 'Class {} (train counts {} / '.format(i, self.train_class_counts[i])
+                eval_info += 'ann counts {}): '.format(self.train_annotation_counts[i])
                 eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
                 eval_info += 'Unconfident wrong % {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
                 eval_info += 'Unconfident correct % {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
@@ -438,3 +437,54 @@ class GTPSMemoryStage2_ConfPseu(PlainMemoryStage2_ConfPseu):
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
         return eval_info, class_acc.mean()
+
+    def deploy_epoch(self, loader):
+
+        self.net.eval()
+
+        total_file_id = []
+        total_preds = []
+        total_max_probs = []
+
+        # Forward and record # correct predictions of each class
+        with torch.set_grad_enabled(False):
+
+            for data, file_id in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data = data.cuda()
+                data.requires_grad = False
+
+                # forward
+                _, logits, values_nn = self.memory_forward(data)
+
+                # scale logits with reachability
+                reachability_logits = (18 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                logits = reachability_logits * logits
+
+                # compute correct
+                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
+
+                total_preds.append(preds.detach().cpu().numpy())
+                total_max_probs.append(max_probs.detach().cpu().numpy())
+                total_file_id.append(file_id)
+
+        total_file_id = np.concatenate(total_file_id, axis=0)
+        total_preds = np.concatenate(total_preds, axis=0)
+        total_max_probs = np.concatenate(total_max_probs, axis=0)
+
+        eval_info = '{} Picking confident samples... \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+
+        conf_preds = np.zeros(len(total_preds))
+        conf_preds[total_max_probs > self.args.theta] = 1
+
+        total_file_id_conf = total_file_id[conf_preds == 1]
+        total_preds_conf = total_preds[conf_preds == 1]
+
+        total_file_id_unconf = total_file_id[conf_preds == 0]
+        total_preds_unconf = total_preds[conf_preds == 0]
+
+        eval_info += 'Total confident sample count is {} out of {} non-empty samples ({:3f}%) \n'.format(len(total_preds_conf), len(total_preds), 100 * (len(total_preds_conf) / len(total_preds)))
+        eval_info += 'Total unconfident sample count is {} out of {} non-empty samples ({:3f}%) \n'.format(len(total_preds_unconf), len(total_preds), 100 * (len(total_preds_unconf) / len(total_preds)))
+
+        return eval_info, (total_file_id_conf, total_preds_conf), (total_file_id_unconf, total_preds_unconf)

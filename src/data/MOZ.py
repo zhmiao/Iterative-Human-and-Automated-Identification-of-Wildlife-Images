@@ -46,7 +46,6 @@ class MOZ_S1(MOZ):
             self.data_split()
 
 
-
 @register_dataset_obj('MOZ_EP')
 class MOZ_EP(MOZ):
 
@@ -61,6 +60,7 @@ class MOZ_EP(MOZ):
         self.load_data(ann_dir)
         if split is not None:
             self.data_split()
+
 
 @register_dataset_obj('MOZ_S3_ALL')
 class MOZ_S3_ALL(Dataset):
@@ -288,6 +288,7 @@ class MOZ_S2(MOZ_ST2):
             # TODO: Check this function!!!
             self.pseudo_label_selection()
 
+
 @register_dataset_obj('MOZ_S2_GTPS')
 class MOZ_S2_GTPS(MOZ_ST2):
 
@@ -331,8 +332,6 @@ class MOZ_S2_LEFTOUT(MOZ):
                                              split=split, transform=transform)
         ann_dir = os.path.join(self.ann_root, 'test_mix_season_2_with_leftout.txt')
         self.load_data(ann_dir)
-
-
 
 
 
