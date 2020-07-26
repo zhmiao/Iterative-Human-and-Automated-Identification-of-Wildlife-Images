@@ -36,7 +36,7 @@ gamma: 0.1
 # confidence
 theta: 0.9
 # if output soft labels
-soft: 0
+soft: 1
 
 # reachability
 reachability_scale: 10.0

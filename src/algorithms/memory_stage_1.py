@@ -34,6 +34,7 @@ class MemoryStage1(PlainStage1):
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
 
+        total_logits = []
         total_preds = []
         total_labels = []
 
@@ -70,6 +71,7 @@ class MemoryStage1(PlainStage1):
                 # Set unconfident prediction to -1
                 preds[max_probs < self.args.theta] = -1
 
+                total_logits.append(logits.detach().cpu().numpy())
                 total_preds.append(preds.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
 
@@ -98,7 +100,7 @@ class MemoryStage1(PlainStage1):
         eval_info += 'Avg unconf wrong %: {:.3f}; \n'.format(class_wrong_percent_unconfident.mean() * 100)
         eval_info += 'Conf acc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
 
-        return eval_info, f1, conf_preds, np.concatenate(total_preds, axis=0)
+        return eval_info, f1, conf_preds, np.concatenate(total_preds, axis=0), np.concatenate(total_logits, axis=0)
 
     def centroids_cal(self, loader):
 
@@ -142,7 +144,7 @@ class MemoryStage1(PlainStage1):
             self.logger.info('Centroids saved to {}.\n'.format(centroids_path))
 
         # Evaluate
-        eval_info, f1, conf_preds, init_pseudo = self.deploy_epoch(loader)
+        eval_info, f1, conf_preds, init_pseudo_hard, init_pseudo_soft = self.deploy_epoch(loader)
 
         self.logger.info(eval_info)
 
@@ -150,9 +152,20 @@ class MemoryStage1(PlainStage1):
         self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
         conf_preds.tofile(conf_preds_path)
 
-        init_pseudo_path = self.weights_path.replace('.pth', '_init_pseudo.npy')
-        self.logger.info('Saving initial pseudolabels to {}'.format(init_pseudo_path))
-        init_pseudo.tofile(init_pseudo_path)
+        if self.args.soft == 1:
+
+            init_pseudo_hard_path = self.weights_path.replace('.pth', '_init_pseudo_hard.npy')
+            self.logger.info('Saving initial hard pseudo labels to {}'.format(init_pseudo_hard_path))
+            init_pseudo_hard.tofile(init_pseudo_hard_path)
+
+            init_pseudo_soft_path = self.weights_path.replace('.pth', '_init_pseudo_soft.npy')
+            self.logger.info('Saving initial soft pseudo targets to {}'.format(init_pseudo_soft_path))
+            init_pseudo_soft.tofile(init_pseudo_soft_path)
+
+        else:
+            init_pseudo_path = self.weights_path.replace('.pth', '_init_pseudo.npy')
+            self.logger.info('Saving initial pseudo labels to {}'.format(init_pseudo_path))
+            init_pseudo_hard.tofile(init_pseudo_path)
 
         return f1
 
