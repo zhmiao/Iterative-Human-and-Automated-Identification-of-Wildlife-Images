@@ -415,10 +415,11 @@ class PlainMemoryStage2_ConfPseu(Algorithm):
                     best_epoch = epoch
             self.save_model(append='hall_warm')
         else:
-            self.logger.info('\nSkipping Hallucinator Warm Up and Updating Schduler Steps...')
-            for epoch in range(self.args.hall_warm_up_epochs):
-                self.sch_feats.step()
-                self.sch_fc_hall.step()
+            exit()
+            # self.logger.info('\nSkipping Hallucinator Warm Up and Updating Schduler Steps...')
+            # for epoch in range(self.args.hall_warm_up_epochs):
+            #     self.sch_feats.step()
+            #     self.sch_fc_hall.step()
 
         # self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
         #                      weights_init=self.weights_path.replace('.pth', '_hall_warm.pth'),
@@ -549,7 +550,7 @@ class PlainMemoryStage2_ConfPseu(Algorithm):
             for batch in tqdm(loader, total=len(loader)):
 
                 if loader == self.trainloader_no_up:
-                    data, labels, _, confs, indices = batch
+                    data, labels, confs, indices = batch
                 else:
                     data, labels = batch
 

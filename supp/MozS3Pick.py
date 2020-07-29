@@ -43,7 +43,8 @@ class_indices_S2 = {class_indices_S2_rev[k]: k for k in class_indices_S2_rev}
 
 root = '/home/zhmiao/datasets/ecology/GNP'
 
-confident_path = '/home/zhmiao/repos/AnimalActiveLearing_srv/weights/GTPSMemoryStage2_ConfPseu/051620_MOZ_S2_0_preds_conf.txt'
+# confident_path = '/home/zhmiao/repos/AnimalActiveLearing_srv/weights/GTPSMemoryStage2_ConfPseu/051620_MOZ_S2_0_preds_conf.txt'
+confident_path = '/home/zhmiao/repos/AnimalActiveLearing_srv/weights/GTPSMemoryStage2_ConfPseu_SoftIter/072520_MOZ_S2_soft_iter_0_preds_conf.txt'
 
 # %% codecell
 
@@ -75,7 +76,7 @@ file_id_sel = file_id_list[rand_idx]
 cat_sel = cat_list[rand_idx]
 
 # %% codecell
-save_root = os.path.join(root, 'S3_pickout')
+save_root = os.path.join(root, 'S3_pickout_soft_iter_072520')
 os.makedirs(save_root, exist_ok=True)
 
 # %% codecell

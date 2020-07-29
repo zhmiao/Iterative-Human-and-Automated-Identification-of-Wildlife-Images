@@ -113,14 +113,14 @@ def load_data(args, conf_preds, pseudo_labels_hard=None, pseudo_labels_soft=None
     return trainloader_no_up, trainloader_up_gt, trainloader_up_ps, testloader, valloader, deployloader
 
 
-@register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter')
-class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
+@register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter_TUNE')
+class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
 
     """
     Overall training function.
     """
 
-    name = 'GTPSMemoryStage2_ConfPseu_SoftIter'
+    name = 'GTPSMemoryStage2_ConfPseu_SoftIter_TUNE'
     net = None
     opt_net = None
     scheduler = None
@@ -168,7 +168,7 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.args.weights_init, num_layers=self.args.num_layers,
-                             init_feat_only=True, T=self.args.T, alpha=self.args.alpha)
+                             init_feat_only=False, T=self.args.T, alpha=self.args.alpha)
 
         self.set_optimizers()
 
@@ -432,32 +432,11 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
         best_epoch = 0
         best_acc = 0.
 
-        # if not os.path.exists(self.weights_path.replace('.pth', '_hall_warm.pth')):
-        for epoch in range(self.args.hall_warm_up_epochs):
-            # Each epoch, reset training loader and sampler with corresponding pseudo labels.
-            self.train_warm_epoch(epoch)
-            self.logger.info('\nValidation.')
-            val_acc_mac = self.evaluate(self.valloader, hall=True)
-            if val_acc_mac > best_acc:
-                self.logger.info('\nUpdating Best Model Weights!!')
-                self.net.update_best()
-                best_acc = val_acc_mac
-                best_epoch = epoch
-        self.save_model(append='hall_warm')
-        # else:
-        #     self.logger.info('\nSkipping Hallucinator Warm Up and Updating Schduler Steps...')
-        #     for epoch in range(self.args.hall_warm_up_epochs):
-        #         self.sch_feats.step()
-        #         self.sch_fc_hall.step()
-        #
-        # self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-        #                      weights_init=self.weights_path.replace('.pth', '_hall_warm.pth'),
-        #                      num_layers=self.args.num_layers, init_feat_only=False,
-        #                      T=self.args.T, alpha=self.args.alpha)
-
-        self.logger.info('\nValidating best warmed hallucinator and reset soft labels.\n')
-        _ = self.evaluate(self.valloader, hall=True, soft_reset=False, hard_reset=False)
-        _ = self.evaluate(self.trainloader_no_up, hall=True, soft_reset=True, hard_reset=False)
+        self.logger.info('\nValidating initial model and reset pseudo labels.\n')
+        # _ = self.evaluate(self.valloader, hall=True, soft_reset=False, hard_reset=False)
+        # _ = self.evaluate(self.trainloader_no_up, hall=True, soft_reset=True, hard_reset=False)
+        _ = self.evaluate(self.valloader, hall=False, soft_reset=False, hard_reset=False)
+        _ = self.evaluate(self.trainloader_no_up, hall=False, soft_reset=True, hard_reset=False)
 
         for semi_i in range(self.args.semi_iters):
 
@@ -488,15 +467,20 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
                     best_acc = val_acc_mac
                     best_epoch = epoch
                     best_semi_iter = semi_i
+                self.logger.info('\nCurrrent Best Acc is {:.3f} at epoch {} semi-iter {}...'
+                                 .format(best_acc * 100, best_epoch, best_semi_iter))
 
+            # Revert to best weights
+            self.net.load_state_dict(copy.deepcopy(self.net.best_weights))
+
+            # Reset pseudo labels
             _ = self.evaluate(self.trainloader_no_up, hall=False, soft_reset=True, hard_reset=True)
 
             self.set_optimizers()
-            # for epoch in range(self.args.hall_warm_up_epochs):
-            #     self.sch_feats.step()
-            #     self.sch_fc_hall.step()
 
-            self.logger.info('\nBest Model Appears at Epoch {} Semi-iteration {}...'.format(best_epoch, best_semi_iter))
+            self.logger.info('\nBest Model Appears at Epoch {} Semi-iteration {} with Acc {:.3f}...'
+                             .format(best_epoch, best_semi_iter, best_acc * 100))
+
             self.save_model()
 
     def evaluate_epoch(self, loader, hall=False, soft_reset=False, hard_reset=False):
@@ -537,7 +521,8 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
                     # scale logits with reachability
                     # reachability_logits = (40 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                     # reachability_logits = (18 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                    reachability_logits = (13 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                    # reachability_logits = (13 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                    reachability_logits = (self.args.reachability_scale_eval / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                     logits = reachability_logits * logits
 
                 # compute correct

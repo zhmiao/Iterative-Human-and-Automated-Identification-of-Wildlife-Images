@@ -10,3 +10,4 @@ from . import plain_stage_2_conf_pseu
 from . import plain_memory_stage_2_conf_pseu
 from . import gtps_memory_stage_2_conf_pseu
 from . import gtps_memory_stage_2_conf_pseu_soft_iter
+from . import gtps_memory_stage_2_conf_pseu_soft_iter_tune
