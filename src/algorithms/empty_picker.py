@@ -27,8 +27,7 @@ def load_data(args):
                                rootdir=args.dataset_root,
                                batch_size=args.batch_size,
                                shuffle=True,
-                               num_workers=args.num_workers,
-                               sampler=None)
+                               num_workers=args.num_workers)
 
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=class_indices[args.class_indices],
@@ -38,8 +37,7 @@ def load_data(args):
                               rootdir=args.dataset_root,
                               batch_size=args.batch_size,
                               shuffle=False,
-                              num_workers=args.num_workers,
-                              sampler=None)
+                              num_workers=args.num_workers)
 
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=class_indices[args.class_indices],
@@ -49,8 +47,7 @@ def load_data(args):
                              rootdir=args.dataset_root,
                              batch_size=args.batch_size,
                              shuffle=False,
-                             num_workers=args.num_workers,
-                             sampler=None)
+                             num_workers=args.num_workers)
 
     deployloader = load_dataset(name=args.deploy_dataset_name,
                                 class_indices=class_indices[args.class_indices],
@@ -60,8 +57,7 @@ def load_data(args):
                                 rootdir=args.dataset_root,
                                 batch_size=args.batch_size,
                                 shuffle=False,
-                                num_workers=args.num_workers,
-                                sampler=None)
+                                num_workers=args.num_workers)
 
     return trainloader, testloader, valloader, deployloader
 
@@ -115,7 +111,9 @@ class EmptyPicker(PlainResNet):
                 logits = self.net.classifier(feats)
 
                 # prediction
-                _, preds = F.softmax(logits, dim=1).max(dim=1)
+                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
+
+                preds[max_probs < 0.8] = 0
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_paths.append(paths)

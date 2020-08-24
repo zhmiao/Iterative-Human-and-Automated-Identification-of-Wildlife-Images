@@ -15,7 +15,7 @@ from src.data.class_indices import class_indices
 from src.models.utils import get_model
 
 
-def load_data(args, conf_preds, pseudo_labels_hard=None, pseudo_labels_soft=None):
+def load_data(args, conf_preds):
 
     """
     Dataloading function. This function can change alg by alg as well.
@@ -36,42 +36,9 @@ def load_data(args, conf_preds, pseudo_labels_hard=None, pseudo_labels_soft=None
                                      num_workers=args.num_workers,
                                      cas_sampler=False,
                                      conf_preds=conf_preds,
-                                     pseudo_labels_hard=pseudo_labels_hard,
-                                     pseudo_labels_soft=pseudo_labels_soft,
-                                     GTPS_mode=None)
-
-    # For the first couple of epochs, no sampler, no oltr, set shuffle to True, set cas sampler to False
-    trainloader_up_gt = load_dataset(name=args.dataset_name,
-                                     class_indices=cls_idx,
-                                     dset='train',
-                                     transform='train_strong',
-                                     split=None,
-                                     rootdir=args.dataset_root,
-                                     batch_size=int(args.batch_size / 2),
-                                     shuffle=True,  # Here
-                                     num_workers=args.num_workers,
-                                     cas_sampler=False,  # Here
-                                     conf_preds=conf_preds,
                                      pseudo_labels_hard=None,
-                                     pseudo_labels_soft=pseudo_labels_soft,
-                                     GTPS_mode='GT',
-                                     blur=True)
-
-    trainloader_up_ps = load_dataset(name=args.dataset_name,
-                                         class_indices=cls_idx,
-                                         dset='train',
-                                         transform='train_strong',
-                                         split=None,
-                                         rootdir=args.dataset_root,
-                                         batch_size=int(args.batch_size / 2),
-                                         shuffle=True,  # Here
-                                         num_workers=args.num_workers,
-                                         cas_sampler=False,  # Here
-                                         conf_preds=conf_preds,
-                                         pseudo_labels_hard=pseudo_labels_hard,
-                                         pseudo_labels_soft=pseudo_labels_soft,
-                                         GTPS_mode='PS',
-                                         blur=True)
+                                     pseudo_labels_soft=None,
+                                     GTPS_mode=None)
 
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
@@ -110,17 +77,17 @@ def load_data(args, conf_preds, pseudo_labels_hard=None, pseudo_labels_soft=None
                                 num_workers=args.num_workers,
                                 cas_sampler=False)
 
-    return trainloader_no_up, trainloader_up_gt, trainloader_up_ps, testloader, valloader, deployloader
+    return trainloader_no_up, testloader, valloader, deployloader
 
 
-@register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter')
-class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
+@register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter_TUNE_2')
+class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE_2(PlainMemoryStage2_ConfPseu):
 
     """
     Overall training function.
     """
 
-    name = 'GTPSMemoryStage2_ConfPseu_SoftIter'
+    name = 'GTPSMemoryStage2_ConfPseu_SoftIter_TUNE_2'
     net = None
     opt_net = None
     scheduler = None
@@ -135,21 +102,15 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
         # Training epochs and logging intervals
         self.log_interval = args.log_interval
         self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
-        self.stage_1_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'), dtype=np.float32)
 
-        self.pseudo_labels_hard = list(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo_hard.npy'),
-                                                   dtype=np.int))
-        self.pseudo_labels_soft = [list(l)
-                                   for l in np.fromfile(args.weights_init.replace('.pth', '_init_pseudo_soft.npy'),
-                                                        dtype=np.float32).reshape((len(self.pseudo_labels_hard), -1))]
+        self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('.pth', '_init_pseudo_hard.npy'), dtype=np.int)
+        self.pseudo_labels_soft = None
 
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader_no_up, self.trainloader_up_gt, self.trainloader_up_ps, self.testloader, \
-            self.valloader, self.deployloader = load_data(args, self.conf_preds,
-                                                          pseudo_labels_hard=self.pseudo_labels_hard,
-                                                          pseudo_labels_soft=self.pseudo_labels_soft)
+        self.trainloader_no_up, self.testloader, self.valloader, self.deployloader = load_data(args, self.conf_preds)
+
         self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
         self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
 
@@ -166,9 +127,13 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
         # setup network
         # The only thing different from plain resnet is that init_feat_only is set to true now
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        # TODO: LOADING WARM HERE
+        # self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+        #                      weights_init=self.args.weights_init, num_layers=self.args.num_layers,
+        #                      init_feat_only=False, T=self.args.T, alpha=self.args.alpha)
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.args.weights_init, num_layers=self.args.num_layers,
-                             init_feat_only=True, T=self.args.T, alpha=self.args.alpha)
+                             weights_init=self.args.weights_init.replace('.pth', '_hall_warm.pth'), num_layers=self.args.num_layers,
+                             init_feat_only=False, T=self.args.T, alpha=self.args.alpha)
 
         self.set_optimizers()
 
@@ -186,7 +151,7 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
                                                    gamma=self.args.gamma)
 
         self.opt_fc_hall = optim.SGD([{'params': self.net.fc_hallucinator.parameters(),
-                                       'lr': self.args.lr_classifier,
+                                       'lr': self.args.lr_classifier * 0.1,
                                        'momentum': self.args.momentum_classifier,
                                        'weight_decay': self.args.weight_decay_classifier}])
         self.sch_fc_hall = optim.lr_scheduler.StepLR(self.opt_fc_hall, step_size=self.args.step_size,
@@ -219,112 +184,90 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
 
         cls_idx = class_indices[self.args.class_indices]
 
+        self.logger.info('\nTRAINLOADER_UP_GT....')
         self.trainloader_up_gt = load_dataset(name=self.args.dataset_name,
-                                         class_indices=cls_idx,
-                                         dset='train',
-                                         transform='train_strong',
-                                         split=None,
-                                         rootdir=self.args.dataset_root,
-                                         batch_size=int(self.args.batch_size / 2),
-                                         shuffle=False,  # Here
-                                         num_workers=self.args.num_workers,
-                                         cas_sampler=True,  # Here
-                                         conf_preds=self.conf_preds,
-                                         pseudo_labels_hard=None,
-                                         pseudo_labels_soft=self.pseudo_labels_soft,
-                                         GTPS_mode='GT',
-                                         blur=True)
+                                              class_indices=cls_idx,
+                                              dset='train',
+                                              transform='train_strong',
+                                              split=None,
+                                              rootdir=self.args.dataset_root,
+                                              batch_size=int(self.args.batch_size / 2),
+                                              shuffle=False,  # Here
+                                              num_workers=self.args.num_workers,
+                                              cas_sampler=True,  # Here
+                                              conf_preds=self.conf_preds,
+                                              pseudo_labels_hard=None,
+                                              pseudo_labels_soft=self.pseudo_labels_soft,
+                                              GTPS_mode='GT',
+                                              blur=True)
 
+        self.logger.info('\nTRAINLOADER_UP_PS....')
         self.trainloader_up_ps = load_dataset(name=self.args.dataset_name,
-                                             class_indices=cls_idx,
-                                             dset='train',
-                                             transform='train_strong',
-                                             split=None,
-                                             rootdir=self.args.dataset_root,
-                                             batch_size=int(self.args.batch_size / 2),
-                                             shuffle=False,  # Here
-                                             num_workers=self.args.num_workers,
-                                             cas_sampler=True,  # Here
-                                             conf_preds=self.conf_preds,
-                                             pseudo_labels_hard=self.pseudo_labels_hard,
-                                             pseudo_labels_soft=self.pseudo_labels_soft,
-                                             GTPS_mode='PS',
-                                             blur=True)
+                                              class_indices=cls_idx,
+                                              dset='train',
+                                              transform='train_strong',
+                                              split=None,
+                                              rootdir=self.args.dataset_root,
+                                              batch_size=int(self.args.batch_size / 2),
+                                              shuffle=False,  # Here
+                                              num_workers=self.args.num_workers,
+                                              cas_sampler=True,  # Here
+                                              conf_preds=self.conf_preds,
+                                              pseudo_labels_hard=self.pseudo_labels_hard,
+                                              pseudo_labels_soft=self.pseudo_labels_soft,
+                                              GTPS_mode='PS',
+                                              blur=True)
 
-    def train_warm_epoch(self, epoch):
+        self.logger.info('\nTRAINLOADER_NO_UP_GT....')
+        self.trainloader_no_up_gt = load_dataset(name=self.args.dataset_name,
+                                                 class_indices=cls_idx,
+                                                 dset='train',
+                                                 transform='train_strong',
+                                                 split=None,
+                                                 rootdir=self.args.dataset_root,
+                                                 batch_size=int(self.args.batch_size / 2),
+                                                 shuffle=True,  # Here
+                                                 num_workers=self.args.num_workers,
+                                                 cas_sampler=False,  # Here
+                                                 conf_preds=self.conf_preds,
+                                                 pseudo_labels_hard=None,
+                                                 pseudo_labels_soft=self.pseudo_labels_soft,
+                                                 GTPS_mode='GT',
+                                                 blur=True)
 
-        self.net.feature.train()
-        self.net.fc_hallucinator.train()
+        self.logger.info('\nTRAINLOADER_NO_UP_PS....')
+        self.trainloader_no_up_ps = load_dataset(name=self.args.dataset_name,
+                                                 class_indices=cls_idx,
+                                                 dset='train',
+                                                 transform='train_strong',
+                                                 split=None,
+                                                 rootdir=self.args.dataset_root,
+                                                 batch_size=int(self.args.batch_size / 2),
+                                                 shuffle=True,  # Here
+                                                 num_workers=self.args.num_workers,
+                                                 cas_sampler=False,  # Here
+                                                 conf_preds=self.conf_preds,
+                                                 pseudo_labels_hard=self.pseudo_labels_hard,
+                                                 pseudo_labels_soft=self.pseudo_labels_soft,
+                                                 GTPS_mode='PS',
+                                                 blur=True)
 
-        iter_gt = iter(self.trainloader_up_gt)
-        iter_ps = iter(self.trainloader_up_ps)
-
-        if self.max_batch is not None and self.max_batch < len(self.trainloader_up_ps):
-            N = self.max_batch
-        else:
-            N = len(self.trainloader_up_ps)
-
-        for batch_idx in range(N):
-
-            # log basic adda train info
-            info_str = '[Warm up training for hallucination (Stage 2)] '
-            info_str += 'Epoch: {} [{}/{} ({:.2f}%)] '.format(epoch, batch_idx,
-                                                              N, 100 * batch_idx / N)
-
-            try:
-                data_gt, labels_gt, _, _, _ = next(iter_gt)
-            except StopIteration:
-                iter_gt = iter(self.trainloader_up_gt)
-                data_gt, labels_gt, _, _, _ = next(iter_gt)
-
-            data_ps, labels_ps, _, _, _ = next(iter_ps)
-
-            data = torch.cat((data_gt, data_ps), dim=0)
-            labels = torch.cat((labels_gt, labels_ps), dim=0)
-
-            ########################
-            # Setup data variables #
-            ########################
-            data, labels = data.cuda(), labels.cuda()
-
-            data.requires_grad = False
-            labels.requires_grad = False
-
-            ####################
-            # Forward and loss #
-            ####################
-            # forward
-            feats = self.net.feature(data)
-            logits = self.net.fc_hallucinator(feats)
-
-            # calculate loss
-            loss = self.net.criterion_cls_hard(logits, labels)
-
-            #############################
-            # Backward and optimization #
-            #############################
-            # zero gradients for optimizer
-            self.opt_feats.zero_grad()
-            self.opt_fc_hall.zero_grad()
-            # loss backpropagation
-            loss.backward()
-            # optimize step
-            self.opt_feats.step()
-            self.opt_fc_hall.step()
-
-            ###########
-            # Logging #
-            ###########
-            if batch_idx % self.log_interval == 0:
-                # compute overall acc
-                preds = logits.argmax(dim=1)
-                acc = (preds == labels).float().mean()
-                # log update info
-                info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
-                self.logger.info(info_str)
-
-        self.sch_feats.step()
-        self.sch_fc_hall.step()
+        self.logger.info('\nTRAINLOADER_NO_UP_GTPS....')
+        self.trainloader_no_up_gtps = load_dataset(name=self.args.dataset_name,
+                                                   class_indices=cls_idx,
+                                                   dset='train',
+                                                   transform='eval',
+                                                   split=None,
+                                                   rootdir=self.args.dataset_root,
+                                                   batch_size=int(self.args.batch_size / 2),
+                                                   shuffle=True,  # Here
+                                                   num_workers=self.args.num_workers,
+                                                   cas_sampler=False,  # Here
+                                                   conf_preds=self.conf_preds,
+                                                   pseudo_labels_hard=self.pseudo_labels_hard,
+                                                   pseudo_labels_soft=self.pseudo_labels_soft,
+                                                   GTPS_mode='both',
+                                                   blur=False)
 
     def train_memory_epoch(self, epoch, soft=False):
 
@@ -334,31 +277,41 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
         self.net.cosnorm_classifier.train()
         self.net.criterion_ctr.train()
 
-        iter_gt = iter(self.trainloader_up_gt)
-        iter_ps = iter(self.trainloader_up_ps)
+        if epoch % self.args.no_up_freq == 0:
+            loader_gt = self.trainloader_no_up_gt
+            loader_ps = self.trainloader_no_up_ps
+            up = False
+        else:
+            loader_gt = self.trainloader_up_gt
+            loader_ps = self.trainloader_up_ps
+            up = True
+
+        iter_gt = iter(loader_gt)
+        iter_ps = iter(loader_ps)
 
         # if self.max_batch is not None and (self.max_batch) * 2 < len(self.trainloader_up_ps):
         #     N = self.max_batch * 2
         # else:
         #     N = len(self.trainloader_up_ps)
 
-        if self.max_batch is not None:
+        if up and self.max_batch is not None:
             N = self.max_batch * 2
         else:
-            N = len(self.trainloader_up_ps)
+            N = len(loader_ps)
 
         for batch_idx in range(N):
 
             # log basic adda train info
             info_str = '[Memory training (Stage 2)] '
             info_str += '[Soft] ' if soft else '[Hard] '
+            info_str += '[up] ' if up else '[no_up] '
             info_str += 'Epoch: {} [{}/{} ({:.2f}%)] '.format(epoch, batch_idx,
                                                               N, 100 * batch_idx / N)
 
             try:
                 data_gt, labels_gt, soft_target_gt, _, _ = next(iter_gt)
             except StopIteration:
-                iter_gt = iter(self.trainloader_up_gt)
+                iter_gt = iter(loader_gt)
                 data_gt, labels_gt, soft_target_gt, _, _ = next(iter_gt)
 
             data_ps, labels_ps, soft_target_ps, _, _ = next(iter_ps)
@@ -431,39 +384,22 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
         best_semi_iter = 0
         best_epoch = 0
         best_acc = 0.
+        best_acc_mean = 0.
 
-        # if not os.path.exists(self.weights_path.replace('.pth', '_hall_warm.pth')):
-        for epoch in range(self.args.hall_warm_up_epochs):
-            # Each epoch, reset training loader and sampler with corresponding pseudo labels.
-            self.train_warm_epoch(epoch)
-            self.logger.info('\nValidation.')
-            val_acc_mac = self.evaluate(self.valloader, hall=True)
-            if val_acc_mac > best_acc:
-                self.logger.info('\nUpdating Best Model Weights!!')
-                self.net.update_best()
-                best_acc = val_acc_mac
-                best_epoch = epoch
-        self.save_model(append='hall_warm')
-        # else:
-        #     self.logger.info('\nSkipping Hallucinator Warm Up and Updating Schduler Steps...')
-        #     for epoch in range(self.args.hall_warm_up_epochs):
-        #         self.sch_feats.step()
-        #         self.sch_fc_hall.step()
-        #
-        # self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-        #                      weights_init=self.weights_path.replace('.pth', '_hall_warm.pth'),
-        #                      num_layers=self.args.num_layers, init_feat_only=False,
-        #                      T=self.args.T, alpha=self.args.alpha)
-
-        self.logger.info('\nValidating best warmed hallucinator and reset soft labels.\n')
+        self.logger.info('\nValidating initial model and reset pseudo labels.\n')
         _ = self.evaluate(self.valloader, hall=True, soft_reset=False, hard_reset=False)
-        _ = self.evaluate(self.trainloader_no_up, hall=True, soft_reset=True, hard_reset=False)
+        _ = self.evaluate(self.trainloader_no_up, hall=True, soft_reset=True, hard_reset=True)
+        # _ = self.evaluate(self.valloader, hall=False, soft_reset=False, hard_reset=False)
+        # _ = self.evaluate(self.trainloader_no_up, hall=False, soft_reset=True, hard_reset=True)
 
         for semi_i in range(self.args.semi_iters):
 
+            # Setting new train loader with CAS
+            self.reset_trainloader()
+
             # Generate centroids!!
             self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
-            initial_centroids = self.centroids_cal(self.trainloader_no_up).clone().detach()
+            initial_centroids = self.centroids_cal(self.trainloader_no_up_gtps).clone().detach()
 
             # Intitialize centroids using named parameter to avoid possible bugs
             with torch.no_grad():
@@ -472,31 +408,36 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
                         self.logger.info('\nPopulating initial centroids.\n')
                         param.copy_(initial_centroids)
 
-            # Setting new train loader with CAS
-            self.reset_trainloader()
-
             for epoch in range(self.args.oltr_epochs):
 
-                self.train_memory_epoch(epoch, soft=semi_i > 0)
+                self.train_memory_epoch(epoch, soft=(semi_i != 0))
 
                 # Validation
                 self.logger.info('\nValidation, semi-iteration {}.'.format(semi_i))
-                val_acc_mac = self.evaluate(self.valloader)
-                if val_acc_mac > best_acc:
+                val_acc = self.evaluate(self.valloader)
+                val_acc_mac, val_acc_mic = val_acc
+                # if val_acc_mac > best_acc:
+                if (val_acc_mac + val_acc_mic) / 2 > best_acc_mean:
                     self.logger.info('\nUpdating Best Model Weights!!')
                     self.net.update_best()
                     best_acc = val_acc_mac
+                    best_acc_mean = (val_acc_mac + val_acc_mic) / 2
                     best_epoch = epoch
                     best_semi_iter = semi_i
+                self.logger.info('\nCurrrent Best Acc is {:.3f} (mean {:.3f}) at epoch {} semi-iter {}...'
+                                 .format(best_acc * 100, best_acc_mean * 100, best_epoch, best_semi_iter))
 
+            # Revert to best weights
+            self.net.load_state_dict(copy.deepcopy(self.net.best_weights))
+
+            # Reset pseudo labels
             _ = self.evaluate(self.trainloader_no_up, hall=False, soft_reset=True, hard_reset=True)
 
             self.set_optimizers()
-            # for epoch in range(self.args.hall_warm_up_epochs):
-            #     self.sch_feats.step()
-            #     self.sch_fc_hall.step()
 
-            self.logger.info('\nBest Model Appears at Epoch {} Semi-iteration {}...'.format(best_epoch, best_semi_iter))
+            self.logger.info('\nBest Model Appears at Epoch {} Semi-iteration {} with Acc {:.3f}...'
+                             .format(best_epoch, best_semi_iter, best_acc * 100))
+
             self.save_model()
 
     def evaluate_epoch(self, loader, hall=False, soft_reset=False, hard_reset=False):
@@ -517,7 +458,7 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
             for batch in tqdm(loader, total=len(loader)):
 
                 if loader == self.trainloader_no_up:
-                    data, labels, _, _, _ = batch
+                    data, labels, _, _ = batch
                 else:
                     data, labels = batch
 
@@ -535,7 +476,16 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
                 else:
                     _, logits, values_nn = self.memory_forward(data)
                     # scale logits with reachability
-                    reachability_logits = (self.args.reachability_scale_eval / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                    # reachability_logits = (40 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                    # reachability_logits = (18 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                    # reachability_logits = (13 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+
+                    if soft_reset or hard_reset:
+                        reachability_logits = ((self.args.reachability_scale / values_nn[:, 0])
+                                               .unsqueeze(1).expand(-1, logits.shape[1]))
+                    else:
+                        reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
+                                               .unsqueeze(1).expand(-1, logits.shape[1]))
                     logits = reachability_logits * logits
 
                 # compute correct
@@ -587,21 +537,27 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
         for c in missing_classes:
             eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
 
+        total_max_probs = np.concatenate(total_max_probs, axis=0)
+        conf_preds = np.zeros(len(total_max_probs))
+        conf_preds[total_max_probs > self.args.theta] = 1
+
         if soft_reset:
             self.logger.info("** Reseting soft pseudo labels **\n")
-            self.pseudo_labels_soft = np.concatenate(total_logits, axis=0)
-
+            if self.pseudo_labels_soft is not None:
+                self.pseudo_labels_soft[conf_preds == 1] = np.concatenate(total_logits, axis=0)[conf_preds == 1]
+            else:
+                self.pseudo_labels_soft = np.concatenate(total_logits, axis=0)
         if hard_reset:
             self.logger.info("** Reseting hard pseudo labels **\n")
-            self.pseudo_labels_hard = np.concatenate(total_preds, axis=0)
+            self.pseudo_labels_hard[conf_preds == 1] = np.concatenate(total_preds, axis=0)[conf_preds == 1]
 
 
-        return eval_info, class_acc.mean()
+        return eval_info, mac_acc, mic_acc
 
     def evaluate(self, loader, hall=False, soft_reset=False, hard_reset=False):
-        eval_info, eval_acc_mac = self.evaluate_epoch(loader, hall=hall, soft_reset=soft_reset, hard_reset=hard_reset)
+        eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader, hall=hall, soft_reset=soft_reset, hard_reset=hard_reset)
         self.logger.info(eval_info)
-        return eval_acc_mac
+        return (eval_acc_mac, eval_acc_mic)
 
     def centroids_cal(self, loader):
 
@@ -614,8 +570,8 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
 
             for batch in tqdm(loader, total=len(loader)):
 
-                if loader == self.trainloader_no_up:
-                    data, labels, _, confs, indices = batch
+                if loader == self.trainloader_no_up_gtps:
+                    data, labels, _, _, _ = batch
                 else:
                     data, labels = batch
 
@@ -658,7 +614,8 @@ class GTPSMemoryStage2_ConfPseu_SoftIter(PlainMemoryStage2_ConfPseu):
                 _, logits, values_nn = self.memory_forward(data)
 
                 # scale logits with reachability
-                reachability_logits = (self.args.reachability_scale_eval / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
+                                       .unsqueeze(1).expand(-1, logits.shape[1]))
                 logits = reachability_logits * logits
 
                 # compute correct

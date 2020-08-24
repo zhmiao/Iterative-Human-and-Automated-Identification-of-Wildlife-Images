@@ -427,9 +427,13 @@ class MOZ_ST2_SoftIter(MOZ):
             sample = self.transform(sample)
 
         if self.conf_preds is not None:
-            soft_label = self.pseudo_labels_soft[index]
-            conf_pred = self.conf_preds[index]
-            return sample, label, torch.tensor(soft_label), conf_pred, index
+            if self.pseudo_labels_soft is not None:
+                soft_label = self.pseudo_labels_soft[index]
+                conf_pred = self.conf_preds[index]
+                return sample, label, torch.tensor(soft_label), conf_pred, index
+            else:
+                conf_pred = self.conf_preds[index]
+                return sample, label, conf_pred, index
         else:
             return sample, label
 

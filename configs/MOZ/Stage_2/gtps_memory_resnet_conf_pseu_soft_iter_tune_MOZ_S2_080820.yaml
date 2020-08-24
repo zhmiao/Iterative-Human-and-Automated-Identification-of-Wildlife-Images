@@ -1,11 +1,16 @@
 # training
-conf_id: 072520_MOZ_S2_soft_iter
-algorithm: GTPSMemoryStage2_ConfPseu_SoftIter
-hall_warm_up_epochs: 20
+# Session 0
+conf_id: 080820_MOZ_S2_soft_iter_tune
+algorithm: GTPSMemoryStage2_ConfPseu_SoftIter_TUNE_2
+hall_warm_up_epochs:
 oltr_epochs: 30
 log_interval: 10
+no_up_freq: 3
 limit_steps: 1
 semi_iters: 3  # Iterations for semi-supervised learning
+## lr_scheduler
+step_size: 10
+gamma: 0.1
 
 # data
 dataset_root: /home/zhmiao/datasets/ecology
@@ -21,14 +26,16 @@ num_samples_cls: 2
 # model
 model_name: MemoryResNetClassifier_SoftIter
 num_layers: 50
-weights_init: ./weights/MemoryStage1/041220_MOZ_S1_0.pth
+weights_init: ./weights/GTPSMemoryStage2_ConfPseu/051620_MOZ_S2_0.pth
 
 # optim
+# Session 0
 ## feature
-lr_feature: 0.001
+lr_feature: 0.00001
 momentum_feature: 0.9
 weight_decay_feature: 0.0005
 ## classifier
+# lr_classifier: 0.01 # Session 0
 lr_classifier: 0.01
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
@@ -36,37 +43,22 @@ weight_decay_classifier: 0.0005
 lr_memory: 0.0001
 momentum_memory: 0.9
 weight_decay_memory: 0.0005
-## lr_scheduler
-step_size: 10
-gamma: 0.1
 
-### feature
-#lr_feature: 0.01
-#momentum_feature: 0.9
-#weight_decay_feature: 0.0005
-### classifier
-#lr_classifier: 0.1
-#momentum_classifier: 0.9
-#weight_decay_classifier: 0.0005
-### memory
-#lr_memory: 0.001
-#momentum_memory: 0.9
-#weight_decay_memory: 0.0005
-### lr_scheduler
-#step_size: 10
-#gamma: 0.1
 
 # center loss weight
 ctr_loss_weight: 0.01
 
 # reachability
 reachability_scale: 10.0
-reachability_scale_eval: 12.0
+#reachability_scale_eval: 8.0
+#reachability_scale_eval: 6.5
+reachability_scale_eval: 10.0
 
 # Soft labels
-T: 15  # Temperature
-alpha: 0.6  # Soft-hard ratio
+# Session 0
+T: 10  # Temperature
+alpha: 0.5  # Soft-hard ratio
 
 # confidence
-theta: 0.9
+theta: 0.95
 
