@@ -75,34 +75,23 @@ def load_data(args, conf_preds, unconf_only=False):
                                 num_workers=args.num_workers,
                                 cas_sampler=False)
 
-    deployloader_ood = load_dataset(name=args.deploy_ood_dataset_name,
-                                    class_indices=cls_idx,
-                                    dset='deploy',
-                                    transform='eval',
-                                    split=None,
-                                    rootdir=args.dataset_root,
-                                    batch_size=args.batch_size,
-                                    shuffle=False,
-                                    num_workers=args.num_workers,
-                                    cas_sampler=False)
-
-    return trainloader, testloader, valloader, deployloader, deployloader_ood
+    return trainloader, testloader, valloader, deployloader
 
 
-@register_algorithm('PlainStage2')
-class PlainStage2(Algorithm):
+@register_algorithm('PlainDistStage2')
+class PlainDistStage2(Algorithm):
 
     """
     Overall training function.
     """
 
-    name = 'PlainStage2'
+    name = 'PlainDistStage2'
     net = None
     opt_net = None
     scheduler = None
 
     def __init__(self, args):
-        super(PlainStage2, self).__init__(args=args)
+        super(PlainDistStage2, self).__init__(args=args)
 
         # Training epochs and logging intervals
         self.num_epochs = args.num_epochs
@@ -113,8 +102,7 @@ class PlainStage2(Algorithm):
         # Setup data for training and testing #
         #######################################
         self.trainloader, self.testloader, \
-        self.valloader, self.deployloader, \
-        self.deployloader_ood = load_data(args, self.conf_preds, unconf_only=True)
+        self.valloader, self.deployloader = load_data(args, self.conf_preds, unconf_only=True)
         self.train_unique_labels, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):
@@ -252,6 +240,19 @@ class PlainStage2(Algorithm):
                 # forward
                 feats = self.net.feature(data)
                 logits = self.net.classifier(feats)
+                
+                # Reachability
+                # expand dimension
+                feats_expand = feats.clone().unsqueeze(1).expand(-1, len(self.centroids), -1)
+                centroids_expand = self.centroids.clone().unsqueeze(0).expand(len(data), -1, -1)
+                # computing reachability
+                dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
+                # Sort distances
+                values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
+                # expand to logits dimension and scale the smallest distance
+                reachability = (self.args.reachability_scale_eval / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                # scale logits with reachability
+                logits = reachability * logits
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
@@ -303,6 +304,10 @@ class PlainStage2(Algorithm):
         return eval_info, class_acc.mean()
 
     def evaluate(self, loader):
+
+        self.logger.info('Calculating training data centroids.\n')
+        self.centroids = self.centroids_cal(self.trainloader)
+
         eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
         return eval_acc_mac
@@ -313,48 +318,38 @@ class PlainStage2(Algorithm):
     def deploy(self, loader):
         pass
 
-    def deploy_ood_epoch(self, loader):
+    def save_model(self):
+        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
+        self.logger.info('Saving to {}'.format(self.weights_path))
+        self.net.save(self.weights_path)
+
+    def centroids_cal(self, loader):
+
         self.net.eval()
 
-        total_preds = []
+        centroids = torch.zeros(len(class_indices[self.args.class_indices]),
+                                self.net.feature_dim).cuda()
 
-        # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
 
-            for data, labels in tqdm(loader, total=len(loader)):
+            for batch in tqdm(loader, total=len(loader)):
+
+                data, labels, _, _ = batch
 
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
                 data.requires_grad = False
                 labels.requires_grad = False
-
-                assert len(torch.unique(labels)) == 1
-
                 # forward
                 feats = self.net.feature(data)
-                logits = self.net.classifier(feats)
+                # Add all calculated features to center tensor
+                for i in range(len(labels)):
+                    label = labels[i]
+                    centroids[label] += feats[i]
 
-                # compute correct
-                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
+        # Get data counts
+        _, loader_class_counts = loader.dataset.class_counts_cal()
+        # Average summed features with class count
+        centroids /= torch.tensor(loader_class_counts).float().unsqueeze(1).cuda()
 
-                # Set unconfident prediction to 1
-                preds[max_probs < self.args.theta] = 1
-                preds[max_probs >= self.args.theta] = 0
-
-                total_preds.append(preds.detach().cpu().numpy())
-
-        total_preds = np.concatenate(total_preds, axis=0)
-        unconf_unknown_percent = total_preds.sum() / len(total_preds)
-
-        eval_info = 'Unconf Unknown Percentage: {:3f}\n'.format(unconf_unknown_percent * 100)
-
-        return eval_info
-
-    def deploy_ood(self, loader):
-        eval_info = self.deploy_ood_epoch(loader)
-        self.logger.info(eval_info)
-
-    def save_model(self):
-        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
-        self.logger.info('Saving to {}'.format(self.weights_path))
-        self.net.save(self.weights_path)
+        return centroids

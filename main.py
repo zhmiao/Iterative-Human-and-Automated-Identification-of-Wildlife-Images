@@ -22,6 +22,8 @@ parser.add_argument('--evaluate', default=False, action='store_true',
                     help='If evaluate the model.')
 parser.add_argument('--deploy', default=False, action='store_true',
                     help='Actual model deployment.')
+parser.add_argument('--deploy_ood', default=False, action='store_true',
+                    help='Actual model deployment for out of distribution.')
 args = parser.parse_args()
 
 #############################
@@ -70,6 +72,10 @@ elif args.deploy:
     alg.set_eval()
     alg.logger.info('\nDeploying...')
     alg.deploy(loader=alg.deployloader)
+elif args.deploy_ood:
+    alg.set_eval()
+    alg.logger.info('\nDeploying OOD...')
+    alg.deploy_ood(loader=alg.deployloader_ood)
 else:
     alg.set_train()
     alg.logger.info('\nTraining...')

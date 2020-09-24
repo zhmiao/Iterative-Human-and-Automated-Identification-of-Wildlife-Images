@@ -77,28 +77,17 @@ def load_data(args, conf_preds):
                                 num_workers=args.num_workers,
                                 cas_sampler=False)
 
-    deployloader_ood = load_dataset(name=args.deploy_ood_dataset_name,
-                                    class_indices=cls_idx,
-                                    dset='deploy',
-                                    transform='eval',
-                                    split=None,
-                                    rootdir=args.dataset_root,
-                                    batch_size=args.batch_size,
-                                    shuffle=False,
-                                    num_workers=args.num_workers,
-                                    cas_sampler=False)
-
-    return trainloader_no_up, testloader, valloader, deployloader, deployloader_ood
+    return trainloader_no_up, testloader, valloader, deployloader
 
 
-@register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter_TUNE')
-class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
+@register_algorithm('PlainDistSemiStage2')
+class PlainDistSemiStage2(Algorithm):
 
     """
     Overall training function.
     """
 
-    name = 'GTPSMemoryStage2_ConfPseu_SoftIter_TUNE'
+    name = 'PlainDistSemiStage2'
     net = None
     opt_net = None
     scheduler = None
@@ -120,8 +109,11 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader_no_up, self.testloader, self.valloader, \
-        self.deployloader, self.deployloader_ood = load_data(args, self.conf_preds)
+        self.trainloader_no_up, self.testloader, self.valloader, self.deployloader = load_data(args, self.conf_preds)
+
+        self.trainloader_no_up_gt = None
+        self.trainloader_no_up_ps = None
+        self.trainloader_no_up_gtps = None
 
         self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
         self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
@@ -144,91 +136,46 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
         #                      weights_init=self.args.weights_init, num_layers=self.args.num_layers,
         #                      init_feat_only=False, T=self.args.T, alpha=self.args.alpha)
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.args.weights_init.replace('.pth', '_hall_warm.pth'), num_layers=self.args.num_layers,
-                             init_feat_only=False, T=self.args.T, alpha=self.args.alpha)
+                             weights_init=self.args.weights_init,
+                             num_layers=self.args.num_layers, init_feat_only=True,
+                             T=self.args.T, alpha=self.args.alpha)
 
         self.set_optimizers()
+
+    def set_eval(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.logger.info('\nLoading from {}'.format(self.weights_path))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
 
     def set_optimizers(self):
         self.logger.info('** SETTING OPTIMIZERS!!! **')
         ######################
         # Optimization setup #
         ######################
+        # Setup optimizer parameters for each network component
+        net_optim_params_list = [
+            {'params': self.net.feature.parameters(),
+             'lr': self.args.lr_feature,
+             'momentum': self.args.momentum_feature,
+             'weight_decay': self.args.weight_decay_feature},
+            {'params': self.net.classifier.parameters(),
+             'lr': self.args.lr_classifier,
+             'momentum': self.args.momentum_classifier,
+             'weight_decay': self.args.weight_decay_classifier}
+        ]
         # Setup optimizer and optimizer scheduler
-        self.opt_feats = optim.SGD([{'params': self.net.feature.parameters(),
-                                     'lr': self.args.lr_feature,
-                                     'momentum': self.args.momentum_feature,
-                                     'weight_decay': self.args.weight_decay_feature}])
-        self.sch_feats = optim.lr_scheduler.StepLR(self.opt_feats, step_size=self.args.step_size,
-                                                   gamma=self.args.gamma)
-
-        self.opt_fc_hall = optim.SGD([{'params': self.net.fc_hallucinator.parameters(),
-                                       'lr': self.args.lr_classifier * 0.1,
-                                       'momentum': self.args.momentum_classifier,
-                                       'weight_decay': self.args.weight_decay_classifier}])
-        self.sch_fc_hall = optim.lr_scheduler.StepLR(self.opt_fc_hall, step_size=self.args.step_size,
-                                                     gamma=self.args.gamma)
-
-        self.opt_fc_sel = optim.SGD([{'params': self.net.fc_selector.parameters(),
-                                      'lr': self.args.lr_classifier,
-                                      'momentum': self.args.momentum_classifier,
-                                      'weight_decay': self.args.weight_decay_classifier}])
-        self.sch_fc_sel = optim.lr_scheduler.StepLR(self.opt_fc_sel, step_size=self.args.step_size,
-                                                    gamma=self.args.gamma)
-
-        self.opt_cos_clf = optim.SGD([{'params': self.net.cosnorm_classifier.parameters(),
-                                       'lr': self.args.lr_classifier,
-                                       'momentum': self.args.momentum_classifier,
-                                       'weight_decay': self.args.weight_decay_classifier}])
-        self.sch_cos_clf = optim.lr_scheduler.StepLR(self.opt_cos_clf, step_size=self.args.step_size,
-                                                     gamma=self.args.gamma)
-
-        self.opt_mem = optim.SGD([{'params': self.net.criterion_ctr.parameters(),
-                                   'lr': self.args.lr_memory,
-                                   'momentum': self.args.momentum_memory,
-                                   'weight_decay': self.args.weight_decay_memory}])
-        self.sch_mem = optim.lr_scheduler.StepLR(self.opt_mem, step_size=self.args.step_size,
-                                                 gamma=self.args.gamma)
+        self.opt_net = optim.SGD(net_optim_params_list)
+        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
 
     def reset_trainloader(self):
 
         self.logger.info('\nReseting training loader and sampler with pseudo labels.')
 
         cls_idx = class_indices[self.args.class_indices]
-
-        self.logger.info('\nTRAINLOADER_UP_GT....')
-        self.trainloader_up_gt = load_dataset(name=self.args.dataset_name,
-                                              class_indices=cls_idx,
-                                              dset='train',
-                                              transform='train_strong',
-                                              split=None,
-                                              rootdir=self.args.dataset_root,
-                                              batch_size=int(self.args.batch_size / 2),
-                                              shuffle=False,  # Here
-                                              num_workers=self.args.num_workers,
-                                              cas_sampler=True,  # Here
-                                              conf_preds=self.conf_preds,
-                                              pseudo_labels_hard=None,
-                                              pseudo_labels_soft=self.pseudo_labels_soft,
-                                              GTPS_mode='GT',
-                                              blur=True)
-
-        self.logger.info('\nTRAINLOADER_UP_PS....')
-        self.trainloader_up_ps = load_dataset(name=self.args.dataset_name,
-                                              class_indices=cls_idx,
-                                              dset='train',
-                                              transform='train_strong',
-                                              split=None,
-                                              rootdir=self.args.dataset_root,
-                                              batch_size=int(self.args.batch_size / 2),
-                                              shuffle=False,  # Here
-                                              num_workers=self.args.num_workers,
-                                              cas_sampler=True,  # Here
-                                              conf_preds=self.conf_preds,
-                                              pseudo_labels_hard=self.pseudo_labels_hard,
-                                              pseudo_labels_soft=self.pseudo_labels_soft,
-                                              GTPS_mode='PS',
-                                              blur=True)
 
         self.logger.info('\nTRAINLOADER_NO_UP_GT....')
         self.trainloader_no_up_gt = load_dataset(name=self.args.dataset_name,
@@ -281,45 +228,34 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
                                                    GTPS_mode='both',
                                                    blur=False)
 
-    def train_memory_epoch(self, epoch, soft=False):
+    def train_epoch(self, epoch, soft=False):
 
-        self.net.feature.train()
-        self.net.fc_hallucinator.train()
-        self.net.fc_selector.train()
-        self.net.cosnorm_classifier.train()
-        self.net.criterion_ctr.train()
+        self.net.train()
 
-        if epoch % self.args.no_up_freq == 0:
-            loader_gt = self.trainloader_no_up_gt
-            loader_ps = self.trainloader_no_up_ps
-            up = False
-        else:
-            loader_gt = self.trainloader_up_gt
-            loader_ps = self.trainloader_up_ps
-            up = True
+        loader_gt = self.trainloader_no_up_gt
+        loader_ps = self.trainloader_no_up_ps
+        up = False
 
         iter_gt = iter(loader_gt)
         iter_ps = iter(loader_ps)
 
-        # if self.max_batch is not None and (self.max_batch) * 2 < len(self.trainloader_up_ps):
-        #     N = self.max_batch * 2
-        # else:
-        #     N = len(self.trainloader_up_ps)
-
-        if up and self.max_batch is not None:
-            N = self.max_batch * 2
-        else:
-            N = len(loader_ps)
+        N = len(loader_ps)
 
         for batch_idx in range(N):
 
+        # for batch_idx, (data, labels, _, _) in enumerate(self.trainloader):
+
             # log basic adda train info
-            info_str = '[Memory training (Stage 2)] '
+            info_str = '[Train plain dist semi (Stage 2)] '
             info_str += '[Soft] ' if soft else '[Hard] '
             info_str += '[up] ' if up else '[no_up] '
             info_str += 'Epoch: {} [{}/{} ({:.2f}%)] '.format(epoch, batch_idx,
                                                               N, 100 * batch_idx / N)
 
+
+            ########################
+            # Setup data variables #
+            ########################
             try:
                 data_gt, labels_gt, soft_target_gt, _, _ = next(iter_gt)
             except StopIteration:
@@ -331,65 +267,57 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
             data = torch.cat((data_gt, data_ps), dim=0)
             labels = torch.cat((labels_gt, labels_ps), dim=0)
             soft_target = torch.cat((soft_target_gt, soft_target_ps), dim=0)
-
-            ########################
-            # Setup data variables #
-            ########################
             # assign devices
             data, labels, soft_target = data.cuda(), labels.cuda(), soft_target.cuda()
             data.requires_grad = False
             labels.requires_grad = False
             soft_target.requires_grad = False
 
+            # ########################
+            # # Setup data variables #
+            # ########################
+            # data, labels = data.cuda(), labels.cuda()
+            #
+            # data.requires_grad = False
+            # labels.requires_grad = False
+
             ####################
             # Forward and loss #
             ####################
-
-            feats, logits, _ = self.memory_forward(data)
-
-            preds = logits.argmax(dim=1)
-
+            # forward
+            feats = self.net.feature(data)
+            logits = self.net.classifier(feats)
             # calculate loss
             if soft:
-                xent_loss = self.net.criterion_cls_soft(logits, labels, soft_target)
+                loss = self.net.criterion_cls_soft(logits, labels, soft_target)
             else:
-                xent_loss = self.net.criterion_cls_hard(logits, labels)
-            ctr_loss = self.net.criterion_ctr(feats.clone(), labels)
-            loss = xent_loss + self.args.ctr_loss_weight * ctr_loss
+                loss = self.net.criterion_cls_hard(logits, labels)
+
+            # # calculate loss
+            # loss = self.net.criterion_cls(logits, labels)
 
             #############################
             # Backward and optimization #
             #############################
             # zero gradients for optimizer
-            self.opt_feats.zero_grad()
-            self.opt_fc_hall.zero_grad()
-            self.opt_fc_sel.zero_grad()
-            self.opt_cos_clf.zero_grad()
-            self.opt_mem.zero_grad()
+            self.opt_net.zero_grad()
             # loss backpropagation
             loss.backward()
             # optimize step
-            self.opt_feats.step()
-            self.opt_fc_hall.step()
-            self.opt_fc_sel.step()
-            self.opt_cos_clf.step()
-            self.opt_mem.step()
+            self.opt_net.step()
 
             ###########
             # Logging #
             ###########
             if batch_idx % self.log_interval == 0:
                 # compute overall acc
+                preds = logits.argmax(dim=1)
                 acc = (preds == labels).float().mean()
                 # log update info
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
                 self.logger.info(info_str)
 
-        self.sch_feats.step()
-        self.sch_fc_hall.step()
-        self.sch_fc_sel.step()
-        self.sch_cos_clf.step()
-        self.sch_mem.step()
+        self.scheduler.step()
 
     def train(self):
 
@@ -397,31 +325,20 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
         best_epoch = 0
         best_acc = 0.
 
-        self.logger.info('\nValidating initial model and reset pseudo labels.\n')
-        _ = self.evaluate(self.valloader, hall=True, soft_reset=False, hard_reset=False)
-        _ = self.evaluate(self.trainloader_no_up, hall=True, soft_reset=True, hard_reset=True)
+        # self.logger.info('\nValidating initial model.\n')
+        _ = self.evaluate(self.trainloader_no_up, soft_reset=True, hard_reset=False)
+        # _ = self.evaluate(self.valloader, soft_reset=False, hard_reset=False)
+        # _ = self.evaluate(self.trainloader_no_up, hall=True, soft_reset=True, hard_reset=True)
         # _ = self.evaluate(self.valloader, hall=False, soft_reset=False, hard_reset=False)
         # _ = self.evaluate(self.trainloader_no_up, hall=False, soft_reset=True, hard_reset=True)
 
         for semi_i in range(self.args.semi_iters):
 
-            # Setting new train loader with CAS
             self.reset_trainloader()
 
-            # Generate centroids!!
-            self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
-            initial_centroids = self.centroids_cal(self.trainloader_no_up_gtps).clone().detach()
+            for epoch in range(self.args.num_epochs):
 
-            # Intitialize centroids using named parameter to avoid possible bugs
-            with torch.no_grad():
-                for name, param in self.net.criterion_ctr.named_parameters():
-                    if name == 'centroids':
-                        self.logger.info('\nPopulating initial centroids.\n')
-                        param.copy_(initial_centroids)
-
-            for epoch in range(self.args.oltr_epochs):
-
-                self.train_memory_epoch(epoch, soft=(semi_i != 0))
+                self.train_epoch(epoch, soft=(semi_i != 0 and semi_i != 1))
 
                 # Validation
                 self.logger.info('\nValidation, semi-iteration {}.'.format(semi_i))
@@ -439,7 +356,7 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
             self.net.load_state_dict(copy.deepcopy(self.net.best_weights))
 
             # Reset pseudo labels
-            _ = self.evaluate(self.trainloader_no_up, hall=False, soft_reset=True, hard_reset=True)
+            _ = self.evaluate(self.trainloader_no_up, soft_reset=True, hard_reset=True)
 
             self.set_optimizers()
 
@@ -448,7 +365,7 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
 
             self.save_model()
 
-    def evaluate_epoch(self, loader, hall=False, soft_reset=False, hard_reset=False):
+    def evaluate_epoch(self, loader, soft_reset=False, hard_reset=False):
 
         self.net.eval()
 
@@ -470,31 +387,27 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
                 else:
                     data, labels = batch
 
-            # for data, labels in tqdm(loader, total=len(loader)):
-
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
                 data.requires_grad = False
                 labels.requires_grad = False
 
                 # forward
-                if hall:
-                    feats = self.net.feature(data)
-                    logits = self.net.fc_hallucinator(feats)
-                else:
-                    _, logits, values_nn = self.memory_forward(data)
-                    # scale logits with reachability
-                    # reachability_logits = (40 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                    # reachability_logits = (18 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                    # reachability_logits = (13 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                feats = self.net.feature(data)
+                logits = self.net.classifier(feats)
 
-                    if soft_reset or hard_reset:
-                        reachability_logits = ((self.args.reachability_scale / values_nn[:, 0])
-                                               .unsqueeze(1).expand(-1, logits.shape[1]))
-                    else:
-                        reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
-                                               .unsqueeze(1).expand(-1, logits.shape[1]))
-                    logits = reachability_logits * logits
+                # Reachability
+                # expand dimension
+                feats_expand = feats.clone().unsqueeze(1).expand(-1, len(self.centroids), -1)
+                centroids_expand = self.centroids.clone().unsqueeze(0).expand(len(data), -1, -1)
+                # computing reachability
+                dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
+                # Sort distances
+                values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
+                # expand to logits dimension and scale the smallest distance
+                reachability = (self.args.reachability_scale_eval / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                # scale logits with reachability
+                logits = reachability * logits
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
@@ -562,8 +475,16 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
 
         return eval_info, class_acc.mean()
 
-    def evaluate(self, loader, hall=False, soft_reset=False, hard_reset=False):
-        eval_info, eval_acc_mac = self.evaluate_epoch(loader, hall=hall, soft_reset=soft_reset, hard_reset=hard_reset)
+    def evaluate(self, loader, soft_reset=False, hard_reset=False):
+
+        self.logger.info('Calculating training data centroids.\n')
+        try:
+            self.centroids = self.centroids_cal(self.trainloader_no_up_gtps)
+        except:
+            self.logger.info('Non-gtps.\n')
+            self.centroids = self.centroids_cal(loader)
+
+        eval_info, eval_acc_mac = self.evaluate_epoch(loader, soft_reset=soft_reset, hard_reset=hard_reset)
         self.logger.info(eval_info)
         return eval_acc_mac
 
@@ -580,6 +501,8 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
 
                 if loader == self.trainloader_no_up_gtps:
                     data, labels, _, _, _ = batch
+                elif loader == self.trainloader_no_up:
+                    data, labels, _, _ = batch
                 else:
                     data, labels = batch
 
@@ -652,49 +575,3 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
         eval_info += 'Total unconfident sample count is {} out of {} non-empty samples ({:3f}%) \n'.format(len(total_preds_unconf), len(total_preds), 100 * (len(total_preds_unconf) / len(total_preds)))
 
         return eval_info, (total_file_id_conf, total_preds_conf), (total_file_id_unconf, total_preds_unconf)
-
-    def deploy_ood_epoch(self, loader):
-
-        self.net.eval()
-
-        total_preds = []
-
-        # Forward and record # correct predictions of each class
-        with torch.set_grad_enabled(False):
-
-            for data, file_id in tqdm(loader, total=len(loader)):
-
-                # setup data
-                data = data.cuda()
-                data.requires_grad = False
-
-                # forward
-                _, logits, values_nn = self.memory_forward(data)
-
-                # scale logits with reachability
-                # reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
-                #                        .unsqueeze(1).expand(-1, logits.shape[1]))
-                # reachability_logits = ((5 / values_nn[:, 0])
-                #                        .unsqueeze(1).expand(-1, logits.shape[1]))
-                # logits = reachability_logits * logits
-
-                # compute correct
-                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
-
-                # Set unconfident prediction to 1
-                preds[max_probs < self.args.theta] = 1
-                preds[max_probs >= self.args.theta] = 0
-
-                total_preds.append(preds.detach().cpu().numpy())
-
-        total_preds = np.concatenate(total_preds, axis=0)
-        unconf_unknown_percent = total_preds.sum() / len(total_preds)
-
-        eval_info = 'Unconf Unknown Percentage: {:3f}\n'.format(unconf_unknown_percent * 100)
-
-        return eval_info
-
-    def deploy_ood(self, loader):
-        eval_info = self.deploy_ood_epoch(loader)
-        self.logger.info(eval_info)
-

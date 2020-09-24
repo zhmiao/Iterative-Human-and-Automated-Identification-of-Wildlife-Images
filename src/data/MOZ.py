@@ -482,9 +482,22 @@ class MOZ_S2_LEFTOUT(MOZ):
     def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
         super(MOZ_S2_LEFTOUT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                              split=split, transform=transform)
-        ann_dir = os.path.join(self.ann_root, 'test_mix_season_2_with_leftout.txt')
+        ann_dir = os.path.join(self.ann_root, 'leftout_mix_new.txt')
         self.load_data(ann_dir)
 
+    def load_data(self, ann_dir):
+        with open(ann_dir, 'r') as f:
+            for line in f:
+                line_sp = line.replace('\n', '').split(' ')
+
+                if line_sp[1] in self.class_indices.keys():
+                    label = self.class_indices[line_sp[1]]
+                else:
+                    label = -1
+
+                if line_sp[0] != 'Mozambique_season_1/Mongoose_large_gray/C06_2016_08_31_08_54_55.JPG':
+                    self.data.append(line_sp[0])
+                    self.labels.append(label)
 
 
 
