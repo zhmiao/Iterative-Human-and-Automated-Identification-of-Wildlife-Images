@@ -14,3 +14,4 @@ from . import gtps_memory_stage_2_conf_pseu_soft_iter_tune
 from . import gtps_memory_stage_2_conf_pseu_soft_iter_tune_2
 from . import plain_dist_stage_2
 from . import plain_dist_semi_stage_2
+from . import plain_all_stage_2
