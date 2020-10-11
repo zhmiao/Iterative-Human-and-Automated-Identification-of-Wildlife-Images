@@ -75,7 +75,18 @@ def load_data(args, conf_preds, unconf_only=False):
                                 num_workers=args.num_workers,
                                 cas_sampler=False)
 
-    return trainloader, testloader, valloader, deployloader
+    deployloader_ood = load_dataset(name=args.deploy_ood_dataset_name,
+                                    class_indices=cls_idx,
+                                    dset='deploy',
+                                    transform='eval',
+                                    split=None,
+                                    rootdir=args.dataset_root,
+                                    batch_size=args.batch_size,
+                                    shuffle=False,
+                                    num_workers=args.num_workers,
+                                    cas_sampler=False)
+
+    return trainloader, testloader, valloader, deployloader, deployloader_ood
 
 
 @register_algorithm('PlainDistStage2')
@@ -102,7 +113,8 @@ class PlainDistStage2(Algorithm):
         # Setup data for training and testing #
         #######################################
         self.trainloader, self.testloader, \
-        self.valloader, self.deployloader = load_data(args, self.conf_preds, unconf_only=True)
+        self.valloader, self.deployloader, \
+        self.deployloader_ood = load_data(args, self.conf_preds, unconf_only=True)
         self.train_unique_labels, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):
@@ -317,6 +329,60 @@ class PlainDistStage2(Algorithm):
 
     def deploy(self, loader):
         pass
+
+    def deploy_ood_epoch(self, loader):
+        self.net.eval()
+
+        total_preds = []
+
+        # Forward and record # correct predictions of each class
+        with torch.set_grad_enabled(False):
+
+            for data, labels in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data, labels = data.cuda(), labels.cuda()
+                data.requires_grad = False
+                labels.requires_grad = False
+
+                assert len(torch.unique(labels)) == 1
+
+                # forward
+                feats = self.net.feature(data)
+                logits = self.net.classifier(feats)
+
+                feats_expand = feats.clone().unsqueeze(1).expand(-1, len(self.centroids), -1)
+                centroids_expand = self.centroids.clone().unsqueeze(0).expand(len(data), -1, -1)
+                # computing reachability
+                dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
+                # Sort distances
+                values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
+                # expand to logits dimension and scale the smallest distance
+                reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                # scale logits with reachability
+                logits = reachability * logits
+
+                # compute correct
+                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
+
+                # Set unconfident prediction to 1
+                preds[max_probs < self.args.theta] = 1
+                preds[max_probs >= self.args.theta] = 0
+
+                total_preds.append(preds.detach().cpu().numpy())
+
+        total_preds = np.concatenate(total_preds, axis=0)
+        unconf_unknown_percent = total_preds.sum() / len(total_preds)
+
+        eval_info = 'Unconf Unknown Percentage: {:3f}\n'.format(unconf_unknown_percent * 100)
+
+        return eval_info
+
+    def deploy_ood(self, loader):
+        self.logger.info('Calculating training data centroids.\n')
+        self.centroids = self.centroids_cal(self.trainloader)
+        eval_info = self.deploy_ood_epoch(loader)
+        self.logger.info(eval_info)
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)

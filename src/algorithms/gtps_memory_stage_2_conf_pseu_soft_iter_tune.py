@@ -488,13 +488,13 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
                     # reachability_logits = (18 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                     # reachability_logits = (13 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
 
-                    if soft_reset or hard_reset:
-                        reachability_logits = ((self.args.reachability_scale / values_nn[:, 0])
-                                               .unsqueeze(1).expand(-1, logits.shape[1]))
-                    else:
-                        reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
-                                               .unsqueeze(1).expand(-1, logits.shape[1]))
-                    logits = reachability_logits * logits
+                    # if soft_reset or hard_reset:
+                    #     reachability_logits = ((self.args.reachability_scale / values_nn[:, 0])
+                    #                            .unsqueeze(1).expand(-1, logits.shape[1]))
+                    # else:
+                    #     reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
+                    #                            .unsqueeze(1).expand(-1, logits.shape[1]))
+                    # logits = reachability_logits * logits
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
@@ -622,9 +622,9 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
                 _, logits, values_nn = self.memory_forward(data)
 
                 # scale logits with reachability
-                reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
-                                       .unsqueeze(1).expand(-1, logits.shape[1]))
-                logits = reachability_logits * logits
+                # reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
+                #                        .unsqueeze(1).expand(-1, logits.shape[1]))
+                # logits = reachability_logits * logits
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
