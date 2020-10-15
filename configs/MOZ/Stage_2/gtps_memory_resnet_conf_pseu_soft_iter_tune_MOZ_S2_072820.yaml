@@ -85,7 +85,7 @@ reachability_scale: 10.0 # Sess 0, 1
 #reachability_scale: 7.0 # Sess 2
 #reachability_scale_eval: 8.0
 # reachability_scale_eval: 6.5
-reachability_scale_eval: 7.0
+reachability_scale_eval: 50.0
 
 # Soft labels
 # Session 0, 79.646, no blur, no rotation
@@ -97,5 +97,5 @@ T: 10  # Temperature
 alpha: 0.5  # Soft-hard ratio
 
 # confidence
-theta: 0.95
+theta: 0.9
 

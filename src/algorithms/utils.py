@@ -276,3 +276,51 @@ def stage_2_metric(preds, max_probs, labels, train_unique_labels, theta):
            total_unconf,\
            missing_cls_in_test,\
            missing_cls_in_train
+
+
+def stage_2_metric_dist(preds, min_dists, labels, train_unique_labels, min_dist_theta):
+
+    num_cls = len(train_unique_labels)
+
+    missing_cls_in_test = list(set(train_unique_labels) - set(np.unique(labels)))
+    missing_cls_in_train = list(set(np.unique(labels)) - set(train_unique_labels))
+
+    class_unconf_wrong = np.array([0. for _ in range(num_cls)])
+    class_unconf_correct = np.array([0. for _ in range(num_cls)])
+    class_conf_correct = np.array([0. for _ in range(num_cls)])
+
+    class_wrong = np.array([1e-7 for _ in range(num_cls)])
+    class_correct = np.array([1e-7 for _ in range(num_cls)])
+    class_conf = np.array([1e-7 for _ in range(num_cls)])
+
+    # Confident indices
+    conf_preds = np.zeros(len(preds))
+    conf_preds[min_dists < min_dist_theta] = 1
+    total_unconf = (conf_preds == 0).sum()
+
+    for i in range(len(preds)):
+
+        pred = preds[i]
+        label = labels[i]
+        conf = conf_preds[i]
+
+        if pred == label:
+            class_correct[label] += 1
+            if conf == 0:
+                class_unconf_correct[label] += 1
+            else:
+                class_conf_correct[label] += 1
+                class_conf[label] += 1
+        else:
+            class_wrong[label] += 1
+            if conf == 0:
+                class_unconf_wrong[label] += 1
+            else:
+                class_conf[label] += 1
+
+    return class_unconf_wrong / class_wrong, \
+           class_unconf_correct / class_correct, \
+           class_conf_correct / class_conf, \
+           total_unconf, \
+           missing_cls_in_test, \
+           missing_cls_in_train

@@ -36,8 +36,8 @@ step_size: 15
 gamma: 0.1
 
 # confidence
-theta: 0.95
+theta: 0.9
 
 # reachability
 reachability_scale: 10.0 # Sess 0, 1
-reachability_scale_eval: 7.0
+reachability_scale_eval: 11.5

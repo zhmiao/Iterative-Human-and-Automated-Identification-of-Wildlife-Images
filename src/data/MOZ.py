@@ -368,6 +368,14 @@ class MOZ_ST2_SoftIter(MOZ):
         self.labels = list(labels[conf_preds == 0])
         self.pseudo_labels_soft = [list(l) for l in soft[conf_preds == 0]]
 
+    def pick_unconf_no_soft(self):
+        print('** PICKING GROUND TRUTHED DATA**')
+        data = np.array(self.data)
+        labels = np.array(self.labels)
+        conf_preds = np.array(self.conf_preds)
+        self.data = list(data[conf_preds == 0])
+        self.labels = list(labels[conf_preds == 0])
+
     def pick_conf(self):
         print('** PICKING PSEUDO LABLED DATA HARD AND SOFT**')
         data = np.array(self.data)
@@ -465,6 +473,9 @@ class MOZ_S2_GTPS_SoftIter(MOZ_ST2_SoftIter):
         elif GTPS_mode == 'GT':
             print('** LOADING ONLY GROUND TRUTH AND SOFT LABELS**')
             self.pick_unconf()
+        elif GTPS_mode == 'GT_ONLY':
+            print('** LOADING ONLY GROUND TRUTH LABELS**')
+            self.pick_unconf_no_soft()
         elif GTPS_mode == 'PS':
             print('** LOADING ONLY PSEUDO LABELS (HARD AND SOFT)**')
             assert pseudo_labels_hard is not None and pseudo_labels_soft is not None

@@ -250,7 +250,8 @@ class PlainMemoryStage2_ConfPseu(Algorithm):
         # final logits
         logits = self.net.cosnorm_classifier(meta_feats)
 
-        return feats, logits, values_nn
+        # return feats, logits, values_nn
+        return feats, logits, values_nn, meta_feats
 
     def train_warm_epoch(self, epoch):
 
@@ -596,7 +597,6 @@ class PlainMemoryStage2_ConfPseu(Algorithm):
         with open(preds_unconf_txt_path, 'w') as f:
             for file_id, pred in zip(*preds_unconf):
                 f.write('{} {}\n'.format(file_id, pred))
-
 
     def save_model(self, append=None):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)

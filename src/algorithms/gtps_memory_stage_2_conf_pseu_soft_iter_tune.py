@@ -40,6 +40,21 @@ def load_data(args, conf_preds):
                                      pseudo_labels_soft=None,
                                      GTPS_mode=None)
 
+    trainloader_cent = load_dataset(name=args.dataset_name,
+                                    class_indices=cls_idx,
+                                    dset='train',
+                                    transform='eval',
+                                    split=args.train_split,
+                                    rootdir=args.dataset_root,
+                                    batch_size=args.batch_size,
+                                    shuffle=False,
+                                    num_workers=args.num_workers,
+                                    cas_sampler=False,
+                                    conf_preds=conf_preds,
+                                    pseudo_labels_hard=None,
+                                    pseudo_labels_soft=None,
+                                    GTPS_mode='GT_ONLY')
+
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
                               dset='test',
@@ -88,7 +103,7 @@ def load_data(args, conf_preds):
                                     num_workers=args.num_workers,
                                     cas_sampler=False)
 
-    return trainloader_no_up, testloader, valloader, deployloader, deployloader_ood
+    return trainloader_no_up, trainloader_cent, testloader, valloader, deployloader, deployloader_ood
 
 
 @register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter_TUNE')
@@ -120,11 +135,17 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader_no_up, self.testloader, self.valloader, \
+        self.trainloader_no_up, self.trainloader_cent, self.testloader, self.valloader, \
         self.deployloader, self.deployloader_ood = load_data(args, self.conf_preds)
 
         self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
         self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
+
+        self.trainloader_up_gt = None
+        self.trainloader_up_ps = None
+        self.trainloader_no_up_gt = None
+        self.trainloader_no_up_ps = None
+        self.trainloader_no_up_gtps = None
 
         if args.limit_steps:
             self.logger.info('** LIMITING STEPS!!! **')
@@ -482,19 +503,38 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
                     feats = self.net.feature(data)
                     logits = self.net.fc_hallucinator(feats)
                 else:
-                    _, logits, values_nn = self.memory_forward(data)
+
+                    # forward
+                    _, logits, values_nn, meta_feats = self.memory_forward(data)
+
+                    # feats_expand = meta_feats.clone().unsqueeze(1).expand(-1, len(self.meta_centroids), -1)
+                    #
+                    # centroids_expand = self.meta_centroids.clone().unsqueeze(0).expand(len(data), -1, -1)
+                    #
+                    # # computing reachability
+                    # dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
+                    # # Sort distances
+                    # values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
+                    #
+                    # min_dists = values_nn[:, 0]
+
+                    # # expand to logits dimension and scale the smallest distance
+                    # reachability = (20 / values_nn[:, 0]).unsqueeze(1).expand(-1,
+                    # # scale logits with reachability
+                    # logits = reachability * logits
+
+                    # _, logits, values_nn = self.memory_forward(data)
                     # scale logits with reachability
                     # reachability_logits = (40 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                     # reachability_logits = (18 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
                     # reachability_logits = (13 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
 
-                    # if soft_reset or hard_reset:
-                    #     reachability_logits = ((self.args.reachability_scale / values_nn[:, 0])
-                    #                            .unsqueeze(1).expand(-1, logits.shape[1]))
-                    # else:
+
+                    # if not soft_reset or not hard_reset:
+                    #     logits /= torch.norm(logits, 2, 1, keepdim=True).clone()
                     #     reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
                     #                            .unsqueeze(1).expand(-1, logits.shape[1]))
-                    # logits = reachability_logits * logits
+                    #     logits = reachability_logits * logits
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
@@ -509,10 +549,10 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
         class_acc_confident, total_unconf, \
         missing_cls_in_test, \
         missing_cls_in_train = stage_2_metric(np.concatenate(total_preds, axis=0),
-                                            np.concatenate(total_max_probs, axis=0),
-                                            np.concatenate(total_labels, axis=0),
-                                            self.train_unique_labels,
-                                            self.args.theta)
+                                              np.concatenate(total_max_probs, axis=0),
+                                              np.concatenate(total_labels, axis=0),
+                                              self.train_unique_labels,
+                                              self.args.theta)
 
         # Record per class accuracies
         class_acc, mac_acc, mic_acc = acc(np.concatenate(total_preds, axis=0),
@@ -563,11 +603,13 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
         return eval_info, class_acc.mean()
 
     def evaluate(self, loader, hall=False, soft_reset=False, hard_reset=False):
+        # self.logger.info('Calculating GT meta centroids.\n')
+        # self.meta_centroids = self.centroids_cal(self.trainloader_cent)
         eval_info, eval_acc_mac = self.evaluate_epoch(loader, hall=hall, soft_reset=soft_reset, hard_reset=hard_reset)
         self.logger.info(eval_info)
         return eval_acc_mac
 
-    def centroids_cal(self, loader):
+    def centroids_cal(self, loader, meta=False):
 
         self.net.eval()
 
@@ -580,6 +622,8 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
 
                 if loader == self.trainloader_no_up_gtps:
                     data, labels, _, _, _ = batch
+                elif loader == self.trainloader_cent:
+                    data, labels, _, _ = batch
                 else:
                     data, labels = batch
 
@@ -588,7 +632,10 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
                 data.requires_grad = False
                 labels.requires_grad = False
                 # forward
-                feats = self.net.feature(data)
+                if meta:
+                    _, _, _, feats = self.memory_forward(data, self_cent=True)
+                else:
+                    feats = self.net.feature(data)
                 # Add all calculated features to center tensor
                 for i in range(len(labels)):
                     label = labels[i]
@@ -669,14 +716,27 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
                 data.requires_grad = False
 
                 # forward
-                _, logits, values_nn = self.memory_forward(data)
+                _, logits, values_nn, meta_feats = self.memory_forward(data)
+
+                # feats_expand = meta_feats.clone().unsqueeze(1).expand(-1, len(self.meta_centroids), -1)
+                #
+                # centroids_expand = self.meta_centroids.clone().unsqueeze(0).expand(len(data), -1, -1)
+                #
+                # # computing reachability
+                # dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
+                # # Sort distances
+                # values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
+                # # expand to logits dimension and scale the smallest distance
+                # # reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                # reachability = (20 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                # # scale logits with reachability
+                # logits = reachability * logits
 
                 # scale logits with reachability
-                # reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
-                #                        .unsqueeze(1).expand(-1, logits.shape[1]))
-                # reachability_logits = ((5 / values_nn[:, 0])
-                #                        .unsqueeze(1).expand(-1, logits.shape[1]))
-                # logits = reachability_logits * logits
+                # logits /= torch.norm(logits, 2, 1, keepdim=True).clone()
+                reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
+                                       .unsqueeze(1).expand(-1, logits.shape[1]))
+                logits = reachability_logits * logits
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
@@ -695,6 +755,8 @@ class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
         return eval_info
 
     def deploy_ood(self, loader):
+        # self.logger.info('Calculating GT meta centroids.\n')
+        # self.meta_centroids = self.centroids_cal(self.trainloader_cent)
         eval_info = self.deploy_ood_epoch(loader)
         self.logger.info(eval_info)
 

@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_2_metric, acc
+from .utils import register_algorithm, Algorithm, stage_2_metric, acc, stage_2_metric_dist
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
@@ -37,6 +37,19 @@ def load_data(args, conf_preds, unconf_only=False):
                                cas_sampler=False,
                                conf_preds=conf_preds,
                                unconf_only=unconf_only)
+
+    trainloader_cent = load_dataset(name=args.dataset_name,
+                                    class_indices=cls_idx,
+                                    dset='train',
+                                    transform='eval',
+                                    split=args.train_split,
+                                    rootdir=args.dataset_root,
+                                    batch_size=args.batch_size,
+                                    shuffle=False,
+                                    num_workers=args.num_workers,
+                                    cas_sampler=False,
+                                    conf_preds=conf_preds,
+                                    unconf_only=True)
 
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
@@ -86,7 +99,7 @@ def load_data(args, conf_preds, unconf_only=False):
                                     num_workers=args.num_workers,
                                     cas_sampler=False)
 
-    return trainloader, testloader, valloader, deployloader, deployloader_ood
+    return trainloader, trainloader_cent, testloader, valloader, deployloader, deployloader_ood
 
 
 @register_algorithm('PlainDistStage2')
@@ -112,7 +125,7 @@ class PlainDistStage2(Algorithm):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader, self.testloader, \
+        self.trainloader, self.trainloader_cent, self.testloader, \
         self.valloader, self.deployloader, \
         self.deployloader_ood = load_data(args, self.conf_preds, unconf_only=True)
         self.train_unique_labels, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
@@ -237,6 +250,7 @@ class PlainDistStage2(Algorithm):
 
         total_preds = []
         total_max_probs = []
+        total_min_dists = []
         total_labels = []
 
         # Forward and record # correct predictions of each class
@@ -261,27 +275,40 @@ class PlainDistStage2(Algorithm):
                 dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
                 # Sort distances
                 values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
-                # expand to logits dimension and scale the smallest distance
-                reachability = (self.args.reachability_scale_eval / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                # scale logits with reachability
-                logits = reachability * logits
+                min_dists = values_nn[:, 0]
+
+                # # expand to logits dimension and scale the smallest distance
+                # reachability = (self.args.reachability_scale_eval / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                # # scale logits with reachability
+                # logits = reachability * logits
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_max_probs.append(max_probs.detach().cpu().numpy())
+                total_min_dists.append(min_dists.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
+
+        # class_wrong_percent_unconfident, \
+        # class_correct_percent_unconfident, \
+        # class_acc_confident, total_unconf, \
+        # missing_cls_in_test, \
+        # missing_cls_in_train = stage_2_metric(np.concatenate(total_preds, axis=0),
+        #                                       np.concatenate(total_max_probs, axis=0),
+        #                                       np.concatenate(total_labels, axis=0),
+        #                                       self.train_unique_labels,
+        #                                       self.args.theta)
 
         class_wrong_percent_unconfident, \
         class_correct_percent_unconfident, \
         class_acc_confident, total_unconf, \
         missing_cls_in_test, \
-        missing_cls_in_train = stage_2_metric(np.concatenate(total_preds, axis=0),
-                                              np.concatenate(total_max_probs, axis=0),
-                                              np.concatenate(total_labels, axis=0),
-                                              self.train_unique_labels,
-                                              self.args.theta)
+        missing_cls_in_train = stage_2_metric_dist(np.concatenate(total_preds, axis=0),
+                                                   np.concatenate(total_min_dists, axis=0),
+                                                   np.concatenate(total_labels, axis=0),
+                                                   self.train_unique_labels,
+                                                   15)
 
         # Record per class accuracies
         class_acc, mac_acc, mic_acc = acc(np.concatenate(total_preds, axis=0),
@@ -318,7 +345,7 @@ class PlainDistStage2(Algorithm):
     def evaluate(self, loader):
 
         self.logger.info('Calculating training data centroids.\n')
-        self.centroids = self.centroids_cal(self.trainloader)
+        self.centroids = self.centroids_cal(self.trainloader_cent)
 
         eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
@@ -357,17 +384,25 @@ class PlainDistStage2(Algorithm):
                 dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
                 # Sort distances
                 values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
-                # expand to logits dimension and scale the smallest distance
-                reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                # scale logits with reachability
-                logits = reachability * logits
+
+                min_dists = values_nn[:, 0]
+
+
+                # # expand to logits dimension and scale the smallest distance
+                # reachability = (self.args.reachability_scale_eval / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
+                # # scale logits with reachability
+                # logits = reachability * logits
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 
+                # # Set unconfident prediction to 1
+                # preds[max_probs < self.args.theta] = 1
+                # preds[max_probs >= self.args.theta] = 0
+
                 # Set unconfident prediction to 1
-                preds[max_probs < self.args.theta] = 1
-                preds[max_probs >= self.args.theta] = 0
+                preds[min_dists >= 10] = 1
+                preds[min_dists < 10] = 0
 
                 total_preds.append(preds.detach().cpu().numpy())
 
@@ -380,7 +415,7 @@ class PlainDistStage2(Algorithm):
 
     def deploy_ood(self, loader):
         self.logger.info('Calculating training data centroids.\n')
-        self.centroids = self.centroids_cal(self.trainloader)
+        self.centroids = self.centroids_cal(self.trainloader_cent)
         eval_info = self.deploy_ood_epoch(loader)
         self.logger.info(eval_info)
 

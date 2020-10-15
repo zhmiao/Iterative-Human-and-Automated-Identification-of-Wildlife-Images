@@ -35,5 +35,5 @@ step_size: 15
 gamma: 0.1
 
 # confidence
-theta: 0.95
+theta: 0.90
 
