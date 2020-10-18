@@ -23,6 +23,8 @@ parser.add_argument('--deploy', default=False, action='store_true',
                     help='Actual model deployment.')
 parser.add_argument('--deploy_ood', default=False, action='store_true',
                     help='Actual model deployment for out of distribution.')
+parser.add_argument('--ood_ft', default=False, action='store_true',
+                    help='Mode for fine-tuning ood.')
 args = parser.parse_args()
 
 #############################
@@ -75,6 +77,10 @@ elif args.deploy_ood:
     alg.set_eval()
     alg.logger.info('\nDeploying OOD...')
     alg.deploy_ood(loader=alg.deployloader_ood)
+elif args.ood_ft:
+    alg.set_eval()
+    alg.logger.info('\nFine-tuning OOD...')
+    alg.ood_ft()
 else:
     alg.set_train()
     alg.logger.info('\nTraining...')

@@ -63,6 +63,18 @@ class MOZ_EP(MOZ):
             self.data_split()
 
 
+@register_dataset_obj('MOZ_EP_OOD')
+class MOZ_EP_OOD(MOZ):
+
+    name = 'MOZ_EP_OOD'
+
+    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+        super(MOZ_EP_OOD, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                         split=split, transform=transform)
+        ann_dir = os.path.join(self.ann_root, 'train_empty_ood.txt')
+        self.load_data(ann_dir)
+
+
 @register_dataset_obj('MOZ_S3_ALL')
 class MOZ_S3_ALL(Dataset):
 
