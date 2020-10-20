@@ -70,8 +70,8 @@ if args.evaluate:
     _ = alg.evaluate(loader=alg.testloader)
     # _ = alg.evaluate(loader=alg.valloader)
 elif args.deploy:
-    # alg.set_eval()
-    alg.set_deploy()
+    alg.set_eval()
+    # alg.set_deploy()
     alg.logger.info('\nDeploying...')
     alg.deploy(loader=alg.deployloader)
 elif args.deploy_ood:

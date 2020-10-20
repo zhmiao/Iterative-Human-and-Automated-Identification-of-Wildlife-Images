@@ -12,7 +12,8 @@ rename = {
     'Honey_badger_': 'Honey_badger',
     'Honey_Badger': 'Honey_badger',
     'Honey Badger': 'Honey_badger',
-    'Mongoose_larger_gray': 'Mongoose_larger_grey',
+    'Mongoose_larger_gray': 'Mongoose_large_grey',
+    'Mongoose_large_gray':'Mongoose_large_grey',
     'Mongoose_white tailed': 'Mongoose_white_tailed',
     'Hippopotamus': 'Hippo',
     'Sable': 'Sable_antelope',
@@ -138,7 +139,15 @@ cat_sel_counts_all
 cat_leftout_counts_all
 
 # %% codecell
-np.random.choice(range(10), 2, replace=False)
+tr_ood_list = open(os.path.join(root, 'SplitLists', 'train_mix_ood.txt'), 'w')
+for cat_id, (cat, count) in tqdm(enumerate(cat_leftout_counts_all), total=len(cat_leftout_counts_all)):
+    # Select category files, labels, and shooting seconds
+    file_sel = file_list_all[label_list_all == cat]
+    label_sel = label_list_all[label_list_all == cat]
+    for f, l in zip(file_sel, label_sel):
+        tr_ood_list.write(f + ' ' + l + '\n')
+tr_ood_list.close()
+
 
 # %% codecell
 
@@ -161,7 +170,7 @@ for cat_id, (cat, count) in tqdm(enumerate(cat_sel_counts_all), total=len(cat_se
         file_sel = file_sel[ghost_id]
         label_sel = label_sel[ghost_id]
         sec_sel = sec_sel[ghost_id]
-    
+
     # Group images by shooting times
     index_group = []
     last_sec = 0.
@@ -245,3 +254,19 @@ tr_s1_list.close()
 te_s1_list.close()
 tr_s2_list.close()
 te_s2_list.close()
+
+# %% codecell
+paths_tr_s1, labels_tr_s1 = read_lists(os.path.join(root, 'SplitLists', 'train_mix_season_1_lt.txt'))
+paths_te_s1, labels_te_s1 = read_lists(os.path.join(root, 'SplitLists', 'test_mix_season_1_lt.txt'))
+paths_tr_s2, labels_tr_s2 = read_lists(os.path.join(root, 'SplitLists', 'train_mix_season_2_lt.txt'))
+paths_te_s2, labels_te_s2 = read_lists(os.path.join(root, 'SplitLists', 'test_mix_season_2_lt.txt'))
+
+# %% codecell
+def list_check(path):
+    for c, n in sorted(zip(*np.unique(path, return_counts=True)), key=lambda x:x[1], reverse=True):
+        print(c, n)
+
+# %% codecell
+{c:i
+for i, (c, _) in enumerate(cat_sel_counts_all)
+}

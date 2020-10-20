@@ -108,7 +108,7 @@ class EnergyStage1(PlainStage1):
 
     def ood_ft(self):
 
-        self.oodloader = load_dataset(name='MOZ_EP_OOD',
+        self.oodloader = load_dataset(name='MOZ_MIX_OOD',
                                       class_indices=class_indices[self.args.class_indices],
                                       dset='train',
                                       transform=self.args.train_transform,
@@ -240,12 +240,12 @@ class EnergyStage1(PlainStage1):
         return eval_info, f1, conf_preds
 
     def deploy(self, loader):
-        # eval_info, f1, conf_preds = self.deploy_epoch(loader, 15., T=1.5)
-        # self.logger.info(eval_info)
-        for the in range(15, 30, 1):
-            self.logger.info('\nThe: {}.'.format(the))
-            eval_info, f1, conf_preds = self.deploy_epoch(loader, the, T=1.5)
-            self.logger.info(eval_info)
+        eval_info, f1, conf_preds = self.deploy_epoch(loader, 15., T=1.5)
+        self.logger.info(eval_info)
+        # for the in range(10, 15, 1):
+        #     self.logger.info('\nThe: {}.'.format(the))
+        #     eval_info, f1, conf_preds = self.deploy_epoch(loader, the, T=1.5)
+        #     self.logger.info(eval_info)
         # conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
         # self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
         # conf_preds.tofile(conf_preds_path)
