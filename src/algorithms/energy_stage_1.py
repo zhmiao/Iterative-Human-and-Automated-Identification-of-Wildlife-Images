@@ -77,21 +77,22 @@ class EnergyStage1(PlainStage1):
             Ec_out = -torch.logsumexp(logits[len(data_in):], dim=1)
             Ec_in = -torch.logsumexp(logits[:len(data_in)], dim=1)
             m_out = -7.
-            m_in = -25.
+            m_in = -18.
             ebloss = torch.pow(F.relu(Ec_in - m_in), 2).mean() + torch.pow(F.relu(m_out - Ec_out), 2).mean()
+            # ebloss = torch.tensor(0.)
 
-            loss = xent + 0.1 * ebloss
+            loss = xent + 0.01 * ebloss
 
             #############################
             # Backward and optimization #
             #############################
             # zero gradients for optimizer
-            self.scheduler.step()
             self.opt_net.zero_grad()
             # loss backpropagation
             loss.backward()
             # optimize step
             self.opt_net.step()
+            self.scheduler.step()
 
             ###########
             # Logging #
@@ -104,7 +105,6 @@ class EnergyStage1(PlainStage1):
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}, EB: {:.3f}'.format(acc.item() * 100, xent.item(), ebloss.item())
                 self.logger.info(info_str)
 
-        self.scheduler.step()
 
     def ood_ft(self):
 
@@ -157,11 +157,22 @@ class EnergyStage1(PlainStage1):
             self.logger.info('\nValidation.')
             val_acc_mac = self.evaluate(self.valloader)
             self.logger.info('\nOOD.')
-            _ = self.deploy(self.deployloader_ood)
+            _ = self.deploy(self.deployloader)
+            self.logger.info('\nUpdating Best Model Weights!!')
+            self.net.update_best()
 
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
         self.logger.info('Saving to {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
         self.net.save(self.weights_path.replace('.pth', '_ft.pth'))
+
+    def set_deploy(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.logger.info('\nLoading from {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path.replace('.pth', '_ft.pth'), num_layers=self.args.num_layers, init_feat_only=False)
 
     def deploy_epoch(self, loader, energy_the, T):
 
@@ -229,8 +240,12 @@ class EnergyStage1(PlainStage1):
         return eval_info, f1, conf_preds
 
     def deploy(self, loader):
-        eval_info, f1, conf_preds = self.deploy_epoch(loader, 10., T=1.5)
-        self.logger.info(eval_info)
+        # eval_info, f1, conf_preds = self.deploy_epoch(loader, 15., T=1.5)
+        # self.logger.info(eval_info)
+        for the in range(15, 30, 1):
+            self.logger.info('\nThe: {}.'.format(the))
+            eval_info, f1, conf_preds = self.deploy_epoch(loader, the, T=1.5)
+            self.logger.info(eval_info)
         # conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
         # self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
         # conf_preds.tofile(conf_preds_path)
