@@ -240,9 +240,9 @@ class EnergyStage1(PlainStage1):
         return eval_info, f1, conf_preds
 
     def deploy(self, loader):
-        eval_info, f1, conf_preds = self.deploy_epoch(loader, 15., T=1.5)
+        eval_info, f1, conf_preds = self.deploy_epoch(loader, 13., T=1.5)
         self.logger.info(eval_info)
-        # for the in range(10, 15, 1):
+        # for the in range(10, 16, 1):
         #     self.logger.info('\nThe: {}.'.format(the))
         #     eval_info, f1, conf_preds = self.deploy_epoch(loader, the, T=1.5)
         #     self.logger.info(eval_info)
