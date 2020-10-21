@@ -13,7 +13,7 @@ rename = {
     'Honey_Badger': 'Honey_badger',
     'Honey Badger': 'Honey_badger',
     'Mongoose_larger_gray': 'Mongoose_large_grey',
-    'Mongoose_large_gray':'Mongoose_large_grey',
+    'Mongoose_large_gray': 'Mongoose_large_grey',
     'Mongoose_white tailed': 'Mongoose_white_tailed',
     'Hippopotamus': 'Hippo',
     'Sable': 'Sable_antelope',
@@ -133,20 +133,71 @@ sec_list_all = np.concatenate((sec_list_s1, sec_list_s2), axis=0)
 cat_sel_counts_all, cat_leftout_counts_all = category_selection(label_list_all, min_count=50)
 
 # %% codecell
+len(cat_sel_counts_all)
 cat_sel_counts_all
 
 # %% codecell
+len(cat_leftout_counts_all)
 cat_leftout_counts_all
 
 # %% codecell
 tr_ood_list = open(os.path.join(root, 'SplitLists', 'train_mix_ood.txt'), 'w')
+te_ood_list = open(os.path.join(root, 'SplitLists', 'test_mix_ood.txt'), 'w')
 for cat_id, (cat, count) in tqdm(enumerate(cat_leftout_counts_all), total=len(cat_leftout_counts_all)):
     # Select category files, labels, and shooting seconds
     file_sel = file_list_all[label_list_all == cat]
     label_sel = label_list_all[label_list_all == cat]
+    sec_sel = sec_list_all[label_list_all == cat]
+
+    if cat_id < 4:
+        random.seed(count)
+
+        # Group images by shooting times
+        index_group = []
+        last_sec = 0.
+        same_shoot_index = []
+        for index, sec in enumerate(sec_sel):
+            if len(same_shoot_index) == 0:
+                same_shoot_index.append(index)
+            else:
+                if (sec - last_sec) < 2:
+                    same_shoot_index.append(index)
+                else:
+                    index_group.append(same_shoot_index)
+                    same_shoot_index = [index]
+            last_sec = sec
+        if len(same_shoot_index) > 0:
+            index_group.append(same_shoot_index)
+
+        # Shuffle shooting groups and get random index list
+        random.shuffle(index_group)
+        index_rand = np.array([i for g in index_group for i in g])
+
+        # Use random indices to shuffle selected files
+        file_sel = file_sel[index_rand]
+
+        train_test_split_ratio = 0.2
+        test_counts = int(train_test_split_ratio * len(file_sel))
+
+        file_sel_te = file_sel[:test_counts]
+        file_sel_tr = file_sel[test_counts:]
+        label_sel_te = label_sel[:test_counts]
+        label_sel_tr = label_sel[test_counts:]
+
+        for f, l in zip(file_sel_tr, label_sel_tr):
+            tr_s2_list.write(f + ' ' + l + '\n')
+
+        for f, l in zip(file_sel_te, label_sel_te):
+            te_s2_list.write(f + ' ' + l + '\n')
+
+    else:
+        for f, l in zip(file_sel, label_sel):
+            te_ood_list.write(f + ' ' + l + '\n')
+
     for f, l in zip(file_sel, label_sel):
         tr_ood_list.write(f + ' ' + l + '\n')
 tr_ood_list.close()
+te_ood_list.close()
 
 
 # %% codecell
