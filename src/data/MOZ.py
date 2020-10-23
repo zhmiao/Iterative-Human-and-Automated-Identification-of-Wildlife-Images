@@ -12,8 +12,8 @@ from .utils import register_dataset_obj, BaseDataset
 
 class MOZ(BaseDataset):
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
-        super(MOZ, self).__init__(class_indices=class_indices, dset=dset, split=split, transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
+        super(MOZ, self).__init__(class_indices=class_indices, dset=dset, transform=transform)
         self.img_root = os.path.join(rootdir, 'Mozambique')
         self.ann_root = os.path.join(rootdir, 'Mozambique', 'SplitLists')
 
@@ -36,15 +36,13 @@ class MOZ_S1_LT(MOZ):
 
     name = 'MOZ_S1_LT'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
         super(MOZ_S1_LT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                        split=split, transform=transform)
+                                        transform=transform)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
         ann_dir = os.path.join(self.ann_root, '{}_mix_season_1_lt.txt'.format(self.dset))
         self.load_data(ann_dir)
-        if split is not None:
-            self.data_split()
 
 
 @register_dataset_obj('MOZ_MIX_OOD')
@@ -52,9 +50,9 @@ class MOZ_MIX_OOD(MOZ):
 
     name = 'MOZ_MIX_OOD'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
         super(MOZ_MIX_OOD, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                         split=split, transform=transform)
+                                          transform=transform)
         ann_dir = os.path.join(self.ann_root, 'train_mix_ood.txt')
         self.load_data(ann_dir)
 
@@ -62,7 +60,7 @@ class MOZ_MIX_OOD(MOZ):
 @register_dataset_obj('MOZ_S3_ALL')
 class MOZ_S3_ALL(Dataset):
 
-    def __init__(self, rootdir, class_indices, dset=None, split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset=None, transform=None):
         self.img_root = os.path.join(rootdir, 'Mozambique', 'Mozambique_season_3')
         self.ann_root = os.path.join(rootdir, 'Mozambique', 'SplitLists')
         self.class_indices = class_indices
@@ -90,25 +88,12 @@ class MOZ_S3_ALL(Dataset):
         return sample, file_id
 
 
-@register_dataset_obj('MOZ_S3_NEP')
-class MOZ_S3_NEP(MOZ_S3_ALL):
-
-    def __init__(self, rootdir, class_indices, dset=None, split=None, transform=None):
-        self.img_root = os.path.join(rootdir, 'Mozambique', 'Mozambique_season_3')
-        self.ann_root = os.path.join(rootdir, 'Mozambique', 'SplitLists')
-        self.class_indices = class_indices
-        self.transform = transform
-        self.data = []
-        ann_dir = os.path.join(self.ann_root, 'Mozambique_season_3_NEP.txt')
-        self.load_data(ann_dir)
-
-
 class MOZ_ST2(MOZ):
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None,
+    def __init__(self, rootdir, class_indices, dset='train',
                  transform=None, conf_preds=None, pseudo_labels=None, unconf_only=False, blur=False):
 
-        super(MOZ_ST2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, split=split,
+        super(MOZ_ST2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, 
                                       transform=transform)
         self.conf_preds = conf_preds
         self.pseudo_labels = pseudo_labels
@@ -208,10 +193,10 @@ class MOZ_S2_LT(MOZ_ST2):
 
     name = 'MOZ_S2_LT'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None,
+    def __init__(self, rootdir, class_indices, dset='train', 
                  transform=None, conf_preds=None, pseudo_labels=None, unconf_only=False):
         super(MOZ_S2_LT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                        split=split, transform=transform, conf_preds=conf_preds,
+                                        transform=transform, conf_preds=conf_preds,
                                         pseudo_labels=pseudo_labels, unconf_only=unconf_only)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
@@ -219,8 +204,6 @@ class MOZ_S2_LT(MOZ_ST2):
         self.load_data(ann_dir)
         if unconf_only:
             self.pick_unconf()
-        if split is not None:
-            self.data_split()
         if pseudo_labels is not None:
             # TODO: Check this function!!!
             self.pseudo_label_selection()
@@ -231,10 +214,10 @@ class MOZ_S2_GTPS(MOZ_ST2):
 
     name = 'MOZ_S2_GTPS'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None,
+    def __init__(self, rootdir, class_indices, dset='train', 
                  transform=None, conf_preds=None, pseudo_labels=None, GTPS_mode='both', blur=False):
         super(MOZ_S2_GTPS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                          split=split, transform=transform, conf_preds=conf_preds,
+                                          transform=transform, conf_preds=conf_preds,
                                           pseudo_labels=pseudo_labels, blur=blur)
         if self.dset == 'val':
             self.dset = 'test'  # MOZ does not use val for now.
@@ -261,11 +244,11 @@ class MOZ_S2_GTPS(MOZ_ST2):
 
 class MOZ_ST2_SoftIter(MOZ):
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None,
+    def __init__(self, rootdir, class_indices, dset='train', 
                  transform=None, conf_preds=None, pseudo_labels_hard=None, pseudo_labels_soft=None,
                  unconf_only=False, blur=False):
 
-        super(MOZ_ST2_SoftIter, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, split=split,
+        super(MOZ_ST2_SoftIter, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, 
                                                transform=transform)
         self.conf_preds = conf_preds
         self.pseudo_labels_hard = pseudo_labels_hard
@@ -387,11 +370,11 @@ class MOZ_S2_GTPS_SoftIter(MOZ_ST2_SoftIter):
 
     name = 'MOZ_S2_GTPS_SoftIter'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None,
+    def __init__(self, rootdir, class_indices, dset='train', 
                  transform=None, conf_preds=None, pseudo_labels_hard=None, pseudo_labels_soft=None,
                  GTPS_mode='both', blur=False):
         super(MOZ_S2_GTPS_SoftIter, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                                   split=split, transform=transform, conf_preds=conf_preds,
+                                                   transform=transform, conf_preds=conf_preds,
                                                    pseudo_labels_hard=pseudo_labels_hard,
                                                    pseudo_labels_soft=pseudo_labels_soft,
                                                    blur=blur)
@@ -426,9 +409,9 @@ class MOZ_S2_LEFTOUT(MOZ):
 
     name = 'MOZ_S2_LEFTOUT'
 
-    def __init__(self, rootdir, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
         super(MOZ_S2_LEFTOUT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                             split=split, transform=transform)
+                                             transform=transform)
         ann_dir = os.path.join(self.ann_root, 'leftout_mix_new.txt')
         self.load_data(ann_dir)
 

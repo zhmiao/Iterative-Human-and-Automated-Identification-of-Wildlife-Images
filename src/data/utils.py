@@ -56,7 +56,7 @@ def register_dataset_obj(name):
     return decorator
 
 
-def get_dataset(name, rootdir, class_indices, dset, transform, split, **add_args):
+def get_dataset(name, rootdir, class_indices, dset, transform, **add_args):
 
     """
     Dataset getter
@@ -64,14 +64,11 @@ def get_dataset(name, rootdir, class_indices, dset, transform, split, **add_args
 
     print('Getting dataset: {} {} {} \n'.format(name, rootdir, dset))
 
-    if dset != 'train':
-        split = None
-
-    return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, split=split,
+    return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, 
                              transform=data_transforms[transform], **add_args)
 
 
-def load_dataset(name, class_indices, dset, transform, split, batch_size=64, rootdir='',
+def load_dataset(name, class_indices, dset, transform, batch_size=64, rootdir='',
                  shuffle=True, num_workers=1, cas_sampler=False, **add_args):
 
     """
@@ -83,7 +80,7 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
 
     print('Shuffle is {}.'.format(shuffle))
 
-    dataset = get_dataset(name, rootdir, class_indices, dset, transform, split=split, **add_args)
+    dataset = get_dataset(name, rootdir, class_indices, dset, transform, **add_args)
 
     if len(dataset) == 0:
         return None
@@ -103,12 +100,11 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
 
 class BaseDataset(Dataset):
 
-    def __init__(self, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, class_indices, dset='train', transform=None):
         self.img_root = None
         self.ann_root = None
         self.class_indices = class_indices
         self.dset = dset
-        self.split = split
         self.transform = transform
         self.data = []
         self.labels = []
@@ -119,37 +115,6 @@ class BaseDataset(Dataset):
     def class_counts_cal(self):
         unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
         return unique_labels, unique_counts
-
-    def data_split(self):
-        print('Splitting data to {} samples each class maximum.'.format(self.split))
-
-        self.data = np.array(self.data)
-        self.labels = np.array(self.labels)
-
-        data_sel = np.empty(shape=0)
-        labels_sel = np.empty(shape=0)
-
-        unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
-
-        for label, counts in zip(unique_labels, unique_counts):
-
-            data_cat = self.data[self.labels == label]
-            labels_cat = self.labels[self.labels == label]
-
-            if counts > self.split:
-
-                np.random.seed(label)
-
-                indices_sel = np.random.choice(np.arange(len(data_cat)), self.split, replace=False)
-
-                data_sel = np.concatenate((data_sel, data_cat[indices_sel]))
-                labels_sel = np.concatenate((labels_sel, labels_cat[indices_sel]))
-            else:
-                data_sel = np.concatenate((data_sel, data_cat))
-                labels_sel = np.concatenate((labels_sel, labels_cat))
-
-        self.data = list(data_sel)
-        self.labels = list(labels_sel.astype(int))
 
     def __len__(self):
         return len(self.labels)

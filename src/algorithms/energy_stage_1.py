@@ -111,7 +111,6 @@ class EnergyStage1(PlainStage1):
                                       class_indices=class_indices[self.args.class_indices],
                                       dset='train',
                                       transform=self.args.train_transform,
-                                      split=None,
                                       rootdir=self.args.dataset_root,
                                       batch_size=self.args.batch_size * 2,
                                       shuffle=True,
