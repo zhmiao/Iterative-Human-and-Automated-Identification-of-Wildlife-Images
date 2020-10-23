@@ -30,6 +30,7 @@ class MOZ(BaseDataset):
                 self.data.append(line_sp[0])
                 self.labels.append(label)
 
+
 @register_dataset_obj('MOZ_S1_LT')
 class MOZ_S1_LT(MOZ):
 

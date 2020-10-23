@@ -5,3 +5,9 @@
 *.DS_Store*
 
 *.vscode*
+
+*weights*
+
+/log
+
+*__pycache__*

@@ -105,7 +105,6 @@ class EnergyStage1(PlainStage1):
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}, EB: {:.3f}'.format(acc.item() * 100, xent.item(), ebloss.item())
                 self.logger.info(info_str)
 
-
     def ood_ft(self):
 
         self.oodloader = load_dataset(name='MOZ_MIX_OOD',
