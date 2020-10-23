@@ -311,13 +311,3 @@ paths_tr_s1, labels_tr_s1 = read_lists(os.path.join(root, 'SplitLists', 'train_m
 paths_te_s1, labels_te_s1 = read_lists(os.path.join(root, 'SplitLists', 'test_mix_season_1_lt.txt'))
 paths_tr_s2, labels_tr_s2 = read_lists(os.path.join(root, 'SplitLists', 'train_mix_season_2_lt.txt'))
 paths_te_s2, labels_te_s2 = read_lists(os.path.join(root, 'SplitLists', 'test_mix_season_2_lt.txt'))
-
-# %% codecell
-def list_check(path):
-    for c, n in sorted(zip(*np.unique(path, return_counts=True)), key=lambda x:x[1], reverse=True):
-        print(c, n)
-
-# %% codecell
-{c:i
-for i, (c, _) in enumerate(cat_sel_counts_all)
-}
