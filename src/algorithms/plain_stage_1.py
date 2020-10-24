@@ -311,6 +311,7 @@ class PlainStage1(Algorithm):
         return eval_info, mac_acc
 
     def evaluate(self, loader):
+        # TODO: implement new evaluations
         eval_info, eval_acc_mac = self.evaluate_epoch(loader)
         self.logger.info(eval_info)
         return eval_acc_mac

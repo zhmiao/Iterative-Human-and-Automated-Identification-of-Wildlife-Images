@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 from .utils import register_dataset_obj, BaseDataset
 
 
+#TODO: merge testing and validation
 class MOZ(BaseDataset):
 
     def __init__(self, rootdir, class_indices, dset='train', transform=None):
