@@ -67,11 +67,11 @@ alg = get_algorithm(args.algorithm, args)
 if args.evaluate:
     alg.set_eval()
     alg.logger.info('\nTesting...')
-    _ = alg.evaluate(loader=alg.testloader)
+    _ = alg.evaluate(loader=alg.testloader, ood=True)
     # _ = alg.evaluate(loader=alg.valloader)
 elif args.deploy:
-    # alg.set_eval()
-    alg.set_deploy()
+    alg.set_eval()
+    # alg.set_deploy()
     alg.logger.info('\nDeploying...')
     alg.deploy(loader=alg.deployloader)
 elif args.deploy_ood:

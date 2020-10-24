@@ -45,15 +45,15 @@ class MOZ_S1_LT(MOZ):
         self.load_data(ann_dir)
 
 
-@register_dataset_obj('MOZ_MIX_OOD')
+@register_dataset_obj('MOZ_UNKNOWN')
 class MOZ_MIX_OOD(MOZ):
 
-    name = 'MOZ_MIX_OOD'
+    name = 'MOZ_UNKNOWN'
 
     def __init__(self, rootdir, class_indices, dset='train', transform=None):
         super(MOZ_MIX_OOD, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                           transform=transform)
-        ann_dir = os.path.join(self.ann_root, 'train_mix_ood.txt')
+        ann_dir = os.path.join(self.ann_root, '{}_mix_ood.txt'.format(dset))
         self.load_data(ann_dir)
 
 

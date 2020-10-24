@@ -29,6 +29,35 @@ class EnergyStage1(PlainStage1):
     def __init__(self, args):
         super(EnergyStage1, self).__init__(args=args)
 
+        self.trainloaderunknown = load_dataset(name='MOZ_UNKNOWN',
+                                               class_indices=class_indices[self.args.class_indices],
+                                               dset='train',
+                                               transform=self.args.train_transform,
+                                               rootdir=self.args.dataset_root,
+                                               batch_size=self.args.batch_size * 2,
+                                               shuffle=True,
+                                               num_workers=self.args.num_workers,
+                                               cas_sampler=False)
+
+        self.testloaderunknown = load_dataset(name='MOZ_UNKNOWN',
+                                              class_indices=class_indices[self.args.class_indices],
+                                              dset='test',
+                                              transform='eval',
+                                              rootdir=self.args.dataset_root,
+                                              batch_size=self.args.batch_size,
+                                              shuffle=False,
+                                              num_workers=self.args.num_workers,
+                                              cas_sampler=False)
+
+    def set_eval(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.logger.info('\nLoading from {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path.replace('.pth', '_ft.pth'), num_layers=self.args.num_layers, init_feat_only=False)
+
     def ood_ft_epoch(self, epoch):
 
         self.net.train()
@@ -36,7 +65,7 @@ class EnergyStage1(PlainStage1):
         N = len(self.trainloader)
 
         in_iter = iter(self.trainloader)
-        out_iter = iter(self.oodloader)
+        out_iter = iter(self.trainloaderunknown)
 
         # for batch_idx, (data_in, labels) in enumerate(self.trainloader):
         for batch_idx in range(N):
@@ -46,7 +75,7 @@ class EnergyStage1(PlainStage1):
             try:
                 data_out, _ = next(out_iter)
             except StopIteration:
-                out_iter = iter(self.oodloader)
+                out_iter = iter(self.trainloaderunknown)
                 data_out, _ = next(out_iter)
 
             data = torch.cat((data_in, data_out), dim=0)
@@ -107,16 +136,6 @@ class EnergyStage1(PlainStage1):
 
     def ood_ft(self):
 
-        self.oodloader = load_dataset(name='MOZ_MIX_OOD',
-                                      class_indices=class_indices[self.args.class_indices],
-                                      dset='train',
-                                      transform=self.args.train_transform,
-                                      rootdir=self.args.dataset_root,
-                                      batch_size=self.args.batch_size * 2,
-                                      shuffle=True,
-                                      num_workers=self.args.num_workers,
-                                      cas_sampler=None)
-
         ######################
         # Optimization setup #
         ######################
@@ -155,7 +174,8 @@ class EnergyStage1(PlainStage1):
             self.logger.info('\nValidation.')
             val_acc_mac = self.evaluate(self.valloader)
             self.logger.info('\nOOD.')
-            _ = self.deploy(self.deployloader)
+            # _ = self.deploy(self.deployloader)
+            _ = self.evaluate(self.testloader, ood=True)
             self.logger.info('\nUpdating Best Model Weights!!')
             self.net.update_best()
 
@@ -163,22 +183,66 @@ class EnergyStage1(PlainStage1):
         self.logger.info('Saving to {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
         self.net.save(self.weights_path.replace('.pth', '_ft.pth'))
 
-    def set_deploy(self):
-        ###############################
-        # Load weights for evaluation #
-        ###############################
-        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
-        self.logger.info('\nLoading from {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
-        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.weights_path.replace('.pth', '_ft.pth'), num_layers=self.args.num_layers, init_feat_only=False)
-
-    def deploy_epoch(self, loader, energy_the, T):
+    def ood_evaluate_epoch(self, loader_in, loader_out, energy_the, T):
 
         self.net.eval()
 
         # Get unique classes in the loader and corresponding counts
-        loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
+        loader_uni_class_in, eval_class_counts_in = loader_in.dataset.class_counts_cal()
+        loader_uni_class_out, eval_class_counts_out = loader_out.dataset.class_counts_cal()
 
+        self.logger.info("Forward through in test loader\n")
+        total_preds_in, total_labels_in, total_energy_score_in = self.ood_forward(loader_in, energy_the, T)
+        total_preds_in = np.concatenate(total_preds_in, axis=0)
+        total_labels_in = np.concatenate(total_labels_in, axis=0)
+
+        self.logger.info("Forward through out test loader\n")
+        total_preds_out, total_labels_out, total_energy_score_out = self.ood_forward(loader_out, energy_the, T)
+        total_preds_out = np.concatenate(total_preds_out, axis=0)
+        total_labels_out = np.concatenate(total_labels_out, axis=0)
+
+        total_preds = np.concatenate((total_preds_out, total_preds_in), axis=0)
+        total_labels = np.concatenate((total_labels_out, total_labels_in), axis=0)
+        loader_uni_class = np.concatenate((loader_uni_class_out, loader_uni_class_in), axis=0)
+        eval_class_counts = np.concatenate((eval_class_counts_out, eval_class_counts_in), axis=0)
+
+        eval_info, f1, conf_preds = self.ood_metric(total_preds, total_labels, loader_uni_class, eval_class_counts)
+
+        return eval_info, f1, conf_preds
+
+    def evaluate(self, loader, ood=False):
+        if ood:
+            eval_info, f1, conf_preds = self.ood_evaluate_epoch(loader, self.testloaderunknown, 13.7, T=1.5)
+            self.logger.info(eval_info)
+            return f1
+        else:
+            eval_info, eval_acc_mac = self.evaluate_epoch(loader)
+            self.logger.info(eval_info)
+            return eval_acc_mac
+
+    def deploy_epoch(self, loader, energy_the, T):
+        self.net.eval()
+        # Get unique classes in the loader and corresponding counts
+        loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
+        total_preds, total_labels, total_energy_score = self.ood_forward(loader, energy_the, T)
+        total_preds = np.concatenate(total_preds, axis=0)
+        total_labels = np.concatenate(total_labels, axis=0)
+        eval_info, f1, conf_preds = self.ood_metric(total_preds, total_labels, loader_uni_class, eval_class_counts)
+        return eval_info, f1, conf_preds
+
+    def deploy(self, loader):
+        eval_info, f1, conf_preds = self.deploy_epoch(loader, 13.7, T=1.5)
+        self.logger.info(eval_info)
+        # for the in range(10, 16, 1):
+        #     self.logger.info('\nThe: {}.'.format(the))
+        #     eval_info, f1, conf_preds = self.deploy_epoch(loader, the, T=1.5)
+        #     self.logger.info(eval_info)
+        # conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
+        # self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
+        # conf_preds.tofile(conf_preds_path)
+        return f1
+
+    def ood_forward(self, loader, energy_the, T):
         total_preds = []
         total_labels = []
         total_energy_score = []
@@ -210,11 +274,14 @@ class EnergyStage1(PlainStage1):
                 total_labels.append(labels.detach().cpu().numpy())
                 total_energy_score.append(energy_score.detach().cpu().numpy())
 
+        return total_preds, total_labels, total_energy_score
+
+    def ood_metric(self, total_preds, total_labels, loader_uni_class, eval_class_counts):
         f1,\
         class_acc_confident, class_percent_confident, false_pos_percent,\
         class_wrong_percent_unconfident,\
-        percent_unknown, conf_preds = stage_1_metric(np.concatenate(total_preds, axis=0),
-                                                     np.concatenate(total_labels, axis=0),
+        percent_unknown, conf_preds = stage_1_metric(total_preds,
+                                                     total_labels,
                                                      loader_uni_class,
                                                      eval_class_counts)
 
@@ -237,14 +304,3 @@ class EnergyStage1(PlainStage1):
 
         return eval_info, f1, conf_preds
 
-    def deploy(self, loader):
-        eval_info, f1, conf_preds = self.deploy_epoch(loader, 13.7, T=1.5)
-        self.logger.info(eval_info)
-        # for the in range(10, 16, 1):
-        #     self.logger.info('\nThe: {}.'.format(the))
-        #     eval_info, f1, conf_preds = self.deploy_epoch(loader, the, T=1.5)
-        #     self.logger.info(eval_info)
-        # conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
-        # self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
-        # conf_preds.tofile(conf_preds_path)
-        return f1

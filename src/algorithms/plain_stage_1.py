@@ -31,7 +31,7 @@ def load_data(args):
                                batch_size=args.batch_size,
                                shuffle=True,
                                num_workers=args.num_workers,
-                               cas_sampler=None)
+                               cas_sampler=False)
 
     testloader = load_dataset(name=args.dataset_name,
                               class_indices=cls_idx,
@@ -41,7 +41,7 @@ def load_data(args):
                               batch_size=args.batch_size,
                               shuffle=False,
                               num_workers=args.num_workers,
-                              cas_sampler=None)
+                              cas_sampler=False)
 
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
@@ -51,7 +51,7 @@ def load_data(args):
                              batch_size=args.batch_size,
                              shuffle=False,
                              num_workers=args.num_workers,
-                             cas_sampler=None)
+                             cas_sampler=False)
 
     # Use replace S1 to S2 for deployment
     deployloader = load_dataset(name=args.deploy_dataset_name,
@@ -62,7 +62,7 @@ def load_data(args):
                                 batch_size=args.batch_size,
                                 shuffle=False,
                                 num_workers=args.num_workers,
-                                cas_sampler=None)
+                                cas_sampler=False)
 
     return trainloader, testloader, valloader, deployloader
 
