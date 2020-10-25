@@ -12,8 +12,6 @@ from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
 
-from .plain_resnet import FineTuneResNet
-
 
 def load_data(args, conf_preds, unconf_only=False):
 

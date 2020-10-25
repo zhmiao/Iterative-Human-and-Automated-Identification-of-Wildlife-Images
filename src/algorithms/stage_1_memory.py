@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from .utils import register_algorithm, stage_1_metric
 from src.data.class_indices import class_indices
-from src.algorithms.plain_stage_1 import PlainStage1
+from src.algorithms.stage_1_plain import PlainStage1
 
 @register_algorithm('MemoryStage1')
 class MemoryStage1(PlainStage1):

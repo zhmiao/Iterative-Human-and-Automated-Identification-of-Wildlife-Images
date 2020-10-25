@@ -21,8 +21,6 @@ parser.add_argument('--evaluate', default=False, action='store_true',
                     help='If evaluate the model.')
 parser.add_argument('--deploy', default=False, action='store_true',
                     help='Actual model deployment.')
-parser.add_argument('--deploy_ood', default=False, action='store_true',
-                    help='Actual model deployment for out of distribution.')
 parser.add_argument('--ood_ft', default=False, action='store_true',
                     help='Mode for fine-tuning ood.')
 args = parser.parse_args()
@@ -68,20 +66,14 @@ if args.evaluate:
     alg.set_eval()
     alg.logger.info('\nValidating...')
     _ = alg.evaluate(loader=alg.valloader, ood=True)
-    # _ = alg.evaluate(loader=alg.valloader)
 elif args.deploy:
     alg.set_eval()
-    # alg.set_deploy()
     alg.logger.info('\nDeploying...')
     alg.deploy(loader=alg.deployloader)
-elif args.deploy_ood:
-    alg.set_eval()
-    alg.logger.info('\nDeploying OOD...')
-    alg.deploy_ood(loader=alg.deployloader_ood)
-elif args.ood_ft:
-    alg.set_eval()
-    alg.logger.info('\nFine-tuning OOD...')
-    alg.ood_ft()
+elif args.energy_ft:
+    alg.set_train()
+    alg.logger.info('\nEnergy Fine-tuning...')
+    alg.energy_ft()
 else:
     alg.set_train()
     alg.logger.info('\nTraining...')
