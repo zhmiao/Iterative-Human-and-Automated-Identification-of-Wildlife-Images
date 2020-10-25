@@ -39,15 +39,15 @@ class EnergyStage1(PlainStage1):
                                                num_workers=self.args.num_workers,
                                                cas_sampler=False)
 
-        self.testloaderunknown = load_dataset(name='MOZ_UNKNOWN',
-                                              class_indices=class_indices[self.args.class_indices],
-                                              dset='test',
-                                              transform='eval',
-                                              rootdir=self.args.dataset_root,
-                                              batch_size=self.args.batch_size,
-                                              shuffle=False,
-                                              num_workers=self.args.num_workers,
-                                              cas_sampler=False)
+        self.valloaderunknown = load_dataset(name='MOZ_UNKNOWN',
+                                             class_indices=class_indices[self.args.class_indices],
+                                             dset='val',
+                                             transform='eval',
+                                             rootdir=self.args.dataset_root,
+                                             batch_size=self.args.batch_size,
+                                             shuffle=False,
+                                             num_workers=self.args.num_workers,
+                                             cas_sampler=False)
 
     def set_eval(self):
         ###############################
@@ -175,7 +175,7 @@ class EnergyStage1(PlainStage1):
             val_acc_mac = self.evaluate(self.valloader)
             self.logger.info('\nOOD.')
             # _ = self.deploy(self.deployloader)
-            _ = self.evaluate(self.testloader, ood=True)
+            _ = self.evaluate(self.valloader, ood=True)
             self.logger.info('\nUpdating Best Model Weights!!')
             self.net.update_best()
 
@@ -212,7 +212,7 @@ class EnergyStage1(PlainStage1):
 
     def evaluate(self, loader, ood=False):
         if ood:
-            eval_info, f1, conf_preds = self.ood_evaluate_epoch(loader, self.testloaderunknown, 13.7, T=1.5)
+            eval_info, f1, conf_preds = self.ood_evaluate_epoch(loader, self.valloaderunknown, 13.7, T=1.5)
             self.logger.info(eval_info)
             return f1
         else:

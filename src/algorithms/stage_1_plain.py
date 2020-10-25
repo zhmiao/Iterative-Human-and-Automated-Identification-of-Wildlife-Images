@@ -33,16 +33,6 @@ def load_data(args):
                                num_workers=args.num_workers,
                                cas_sampler=False)
 
-    testloader = load_dataset(name=args.dataset_name,
-                              class_indices=cls_idx,
-                              dset='test',
-                              transform='eval',
-                              rootdir=args.dataset_root,
-                              batch_size=args.batch_size,
-                              shuffle=False,
-                              num_workers=args.num_workers,
-                              cas_sampler=False)
-
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
                              dset='val',
@@ -64,7 +54,7 @@ def load_data(args):
                                 num_workers=args.num_workers,
                                 cas_sampler=False)
 
-    return trainloader, testloader, valloader, deployloader
+    return trainloader, valloader, deployloader
 
 
 @register_algorithm('PlainStage1')
@@ -89,7 +79,7 @@ class PlainStage1(Algorithm):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader, self.testloader, self.valloader, self.deployloader = load_data(args)
+        self.trainloader, self.valloader, self.deployloader = load_data(args)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
 
     def set_train(self):

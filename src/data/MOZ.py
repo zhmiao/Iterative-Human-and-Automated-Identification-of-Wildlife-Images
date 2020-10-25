@@ -40,8 +40,6 @@ class MOZ_S1_LT(MOZ):
     def __init__(self, rootdir, class_indices, dset='train', transform=None):
         super(MOZ_S1_LT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                         transform=transform)
-        if self.dset == 'val':
-            self.dset = 'test'  # MOZ does not use val for now.
         ann_dir = os.path.join(self.ann_root, '{}_mix_season_1_lt.txt'.format(self.dset))
         self.load_data(ann_dir)
 
@@ -199,8 +197,6 @@ class MOZ_S2_LT(MOZ_ST2):
         super(MOZ_S2_LT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                         transform=transform, conf_preds=conf_preds,
                                         pseudo_labels=pseudo_labels, unconf_only=unconf_only)
-        if self.dset == 'val':
-            self.dset = 'test'  # MOZ does not use val for now.
         ann_dir = os.path.join(self.ann_root, '{}_mix_season_2_lt.txt'.format(self.dset))
         self.load_data(ann_dir)
         if unconf_only:
@@ -220,8 +216,6 @@ class MOZ_S2_GTPS(MOZ_ST2):
         super(MOZ_S2_GTPS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                           transform=transform, conf_preds=conf_preds,
                                           pseudo_labels=pseudo_labels, blur=blur)
-        if self.dset == 'val':
-            self.dset = 'test'  # MOZ does not use val for now.
 
         ann_dir = os.path.join(self.ann_root, '{}_mix_season_2.txt'.format(self.dset))
 
@@ -379,8 +373,6 @@ class MOZ_S2_GTPS_SoftIter(MOZ_ST2_SoftIter):
                                                    pseudo_labels_hard=pseudo_labels_hard,
                                                    pseudo_labels_soft=pseudo_labels_soft,
                                                    blur=blur)
-        if self.dset == 'val':
-            self.dset = 'test'  # MOZ does not use val for now.
 
         ann_dir = os.path.join(self.ann_root, '{}_mix_season_2.txt'.format(self.dset))
 

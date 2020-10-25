@@ -66,8 +66,8 @@ setattr(args, 'logger', logger)
 alg = get_algorithm(args.algorithm, args)
 if args.evaluate:
     alg.set_eval()
-    alg.logger.info('\nTesting...')
-    _ = alg.evaluate(loader=alg.testloader, ood=True)
+    alg.logger.info('\nValidating...')
+    _ = alg.evaluate(loader=alg.valloader, ood=True)
     # _ = alg.evaluate(loader=alg.valloader)
 elif args.deploy:
     alg.set_eval()
