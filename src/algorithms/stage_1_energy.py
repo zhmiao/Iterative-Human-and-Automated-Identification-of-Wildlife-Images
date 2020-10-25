@@ -89,6 +89,36 @@ class EnergyStage1(PlainStage1):
                              weights_init=self.weights_path.replace('.pth', '_ft.pth'), num_layers=self.args.num_layers,
                              init_feat_only=False)
 
+    def energy_ft(self):
+        for epoch in range(self.num_epochs):
+            # Training
+            self.ood_ft_epoch(epoch)
+            # Validation
+            self.logger.info('\nValidation.')
+            _ = self.evaluate(self.valloader, ood=True)
+            self.logger.info('\nUpdating Best Model Weights!!')
+            self.net.update_best()
+        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
+        self.logger.info('Saving to {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
+        self.net.save(self.weights_path.replace('.pth', '_ft.pth'))
+
+    def deploy(self, loader):
+        eval_info, f1, conf_preds, init_pseudo_hard, init_pseudo_soft = self.deploy_epoch(loader)
+        self.logger.info(eval_info)
+        conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
+        self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
+        conf_preds.tofile(conf_preds_path)
+
+        init_pseudo_hard_path = self.weights_path.replace('.pth', '_init_pseudo_hard.npy')
+        self.logger.info('Saving initial hard pseudo labels to {}'.format(init_pseudo_hard_path))
+        init_pseudo_hard.tofile(init_pseudo_hard_path)
+
+        init_pseudo_soft_path = self.weights_path.replace('.pth', '_init_pseudo_soft.npy')
+        self.logger.info('Saving initial soft pseudo targets to {}'.format(init_pseudo_soft_path))
+        init_pseudo_soft.tofile(init_pseudo_soft_path)
+
+        return f1
+
     def energy_ft_epoch(self, epoch):
 
         self.net.train()
@@ -165,22 +195,22 @@ class EnergyStage1(PlainStage1):
                 info_str += 'Acc: {:0.1f} Xent: {:.3f}, EB: {:.3f}'.format(acc.item() * 100, xent.item(), ebloss.item())
                 self.logger.info(info_str)
 
-    def energy_ft(self):
-        for epoch in range(self.num_epochs):
-            # Training
-            self.ood_ft_epoch(epoch)
-            # Validation
-            self.logger.info('\nValidation.')
-            _ = self.evaluate(self.valloader, ood=True)
-            self.logger.info('\nUpdating Best Model Weights!!')
-            self.net.update_best()
-        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
-        self.logger.info('Saving to {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
-        self.net.save(self.weights_path.replace('.pth', '_ft.pth'))
+    def deploy_epoch(self, loader):
+        self.net.eval()
+        # Get unique classes in the loader and corresponding counts
+        loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
+        total_preds, total_labels, total_logits = self.evaluate_forward(loader, ood=True)
+        total_preds = np.concatenate(total_preds, axis=0)
+        total_labels = np.concatenate(total_labels, axis=0)
+        total_logits = np.concatenate(total_logits, axis=0)
+        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, loader_uni_class,
+                                                         eval_class_counts, ood=True)
+        return eval_info, f1, conf_preds, total_preds, total_logits
 
     def evaluate_forward(self, loader, ood=False):
         total_preds = []
         total_labels = []
+        total_logits = []
 
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
@@ -205,6 +235,7 @@ class EnergyStage1(PlainStage1):
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
+                total_logits.append(logits.detach().cpu().numpy())
 
-        return total_preds, total_labels
+        return total_preds, total_labels, total_logits
 

@@ -224,7 +224,7 @@ class PlainStage1(Algorithm):
         self.net.eval()
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        total_preds, total_labels = self.evaluate_forward(loader, ood=False)
+        total_preds, total_labels, _ = self.evaluate_forward(loader, ood=False)
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
         eval_info, mac_acc = self.evaluate_metric(total_preds, total_labels, loader_uni_class,
@@ -238,12 +238,12 @@ class PlainStage1(Algorithm):
         loader_uni_class_out, eval_class_counts_out = loader_out.dataset.class_counts_cal()
 
         self.logger.info("Forward through in test loader\n")
-        total_preds_in, total_labels_in = self.evaluate_forward(loader_in, ood=True)
+        total_preds_in, total_labels_in, _ = self.evaluate_forward(loader_in, ood=True)
         total_preds_in = np.concatenate(total_preds_in, axis=0)
         total_labels_in = np.concatenate(total_labels_in, axis=0)
 
         self.logger.info("Forward through out test loader\n")
-        total_preds_out, total_labels_out = self.evaluate_forward(loader_out, ood=True)
+        total_preds_out, total_labels_out, _ = self.evaluate_forward(loader_out, ood=True)
         total_preds_out = np.concatenate(total_preds_out, axis=0)
         total_labels_out = np.concatenate(total_labels_out, axis=0)
 
@@ -261,7 +261,7 @@ class PlainStage1(Algorithm):
         self.net.eval()
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        total_preds, total_labels = self.evaluate_forward(loader, ood=True)
+        total_preds, total_labels, _ = self.evaluate_forward(loader, ood=True)
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
         eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, loader_uni_class,
@@ -271,6 +271,7 @@ class PlainStage1(Algorithm):
     def evaluate_forward(self, loader, ood=False):
         total_preds = []
         total_labels = []
+        total_logits = []
 
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
@@ -294,8 +295,9 @@ class PlainStage1(Algorithm):
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
+                total_logits.append(logits.detach().cpu().numpy())
 
-        return total_preds, total_labels
+        return total_preds, total_labels, total_logits
 
     def evaluate_metric(self, total_preds, total_labels, loader_uni_class, eval_class_counts, ood=False):
         if ood:
