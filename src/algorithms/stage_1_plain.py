@@ -53,7 +53,6 @@ def load_data(args):
                                     num_workers=args.num_workers,
                                     cas_sampler=False)
 
-    # Use replace S1 to S2 for deployment
     deployloader = load_dataset(name=args.deploy_dataset_name,
                                 class_indices=cls_idx,
                                 dset='train',

@@ -7,7 +7,7 @@ limit_steps: 0
 
 # data
 dataset_root: /home/zhmiao/datasets/ecology
-dataset_name: MOZ_S2_LT_GT
+dataset_name: MOZ_S2_LT_GTPS
 unknown_dataset_name: MOZ_UNKNOWN
 deploy_dataset_name: MOZ_S3_ALL
 class_indices: MOZ_S2_LT
