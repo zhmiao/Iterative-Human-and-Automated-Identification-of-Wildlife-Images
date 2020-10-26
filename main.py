@@ -21,7 +21,7 @@ parser.add_argument('--evaluate', default=False, action='store_true',
                     help='If evaluate the model.')
 parser.add_argument('--deploy', default=False, action='store_true',
                     help='Actual model deployment.')
-parser.add_argument('--ood_ft', default=False, action='store_true',
+parser.add_argument('--energy_ft', default=False, action='store_true',
                     help='Mode for fine-tuning ood.')
 args = parser.parse_args()
 

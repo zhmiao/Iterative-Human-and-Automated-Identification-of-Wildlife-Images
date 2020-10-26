@@ -10,7 +10,6 @@ from torch.utils.data import Dataset
 from .utils import register_dataset_obj, BaseDataset
 
 
-#TODO: merge testing and validation
 class MOZ(BaseDataset):
 
     def __init__(self, rootdir, class_indices, dset='train', transform=None):
@@ -41,6 +40,18 @@ class MOZ_S1_LT(MOZ):
         super(MOZ_S1_LT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
                                         transform=transform)
         ann_dir = os.path.join(self.ann_root, '{}_mix_season_1_lt.txt'.format(self.dset))
+        self.load_data(ann_dir)
+
+
+@register_dataset_obj('MOZ_S2_LT_FULL')
+class MOZ_S2_LT_FULL(MOZ):
+
+    name = 'MOZ_S2_LT_FULL'
+
+    def __init__(self, rootdir, class_indices, dset='train', transform=None):
+        super(MOZ_S2_LT_FULL, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
+                                             transform=transform)
+        ann_dir = os.path.join(self.ann_root, '{}_mix_season_2_lt.txt'.format(self.dset))
         self.load_data(ann_dir)
 
 
@@ -187,23 +198,6 @@ class MOZ_ST2(MOZ):
             return sample, label
 
 
-@register_dataset_obj('MOZ_S2_LT')
-class MOZ_S2_LT(MOZ_ST2):
-
-    name = 'MOZ_S2_LT'
-
-    def __init__(self, rootdir, class_indices, dset='train', 
-                 transform=None, conf_preds=None, pseudo_labels=None, unconf_only=False):
-        super(MOZ_S2_LT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                        transform=transform, conf_preds=conf_preds,
-                                        pseudo_labels=pseudo_labels, unconf_only=unconf_only)
-        ann_dir = os.path.join(self.ann_root, '{}_mix_season_2_lt.txt'.format(self.dset))
-        self.load_data(ann_dir)
-        if unconf_only:
-            self.pick_unconf()
-        if pseudo_labels is not None:
-            # TODO: Check this function!!!
-            self.pseudo_label_selection()
 
 
 @register_dataset_obj('MOZ_S2_GTPS')

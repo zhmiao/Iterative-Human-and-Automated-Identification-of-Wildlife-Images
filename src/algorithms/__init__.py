@@ -1,7 +1,7 @@
 from . import utils
 from . import stage_1_plain
 from . import stage_1_energy
-from . import stage_1_memory
+from . import stage_2_full_finetune
 from . import plain_stage_2
 from . import memory_stage_2
 from . import memory_stage_2_conf_pseu
@@ -13,4 +13,3 @@ from . import gtps_memory_stage_2_conf_pseu_soft_iter_tune
 from . import gtps_memory_stage_2_conf_pseu_soft_iter_tune_2
 from . import plain_dist_stage_2
 from . import plain_dist_semi_stage_2
-from . import plain_all_stage_2
