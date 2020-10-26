@@ -70,14 +70,14 @@ def load_data(args, conf_preds):
 
     return trainloader, valloader, valloaderunknown, deployloader
 
-@register_algorithm('GTFineTuneStage2')
-class GTFineTuneStage2(PlainStage1):
+@register_algorithm('SemiStage2')
+class SemiStage2(PlainStage1):
 
     """
     Overall training function.
     """
 
-    name = 'GTFineTuneStage2'
+    name = 'SemiStage2'
     net = None
     opt_net = None
     scheduler = None
@@ -98,6 +98,7 @@ class GTFineTuneStage2(PlainStage1):
         self.trainloader, self.valloader,\
         self.valloaderunknown, self.deployloader = load_data(args, self.conf_preds)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
+        self.train_annotation_counts = self.train_class_counts
 
     def train_epoch(self, epoch):
 

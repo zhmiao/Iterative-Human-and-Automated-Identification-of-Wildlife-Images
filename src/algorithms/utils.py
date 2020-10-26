@@ -129,8 +129,9 @@ def confident_metrics(preds, labels, class_counts):
     class_acc_confident = class_correct_confident / class_select_confident
     class_percent_confident = class_select_confident / class_counts[1:]
     false_pos_percent = false_pos_counts / len(labels_confident)
+    total_known = len(labels[labels != -1])
 
-    return class_acc_confident, class_percent_confident, false_pos_percent
+    return class_acc_confident, class_percent_confident, false_pos_percent, total_known
 
 
 def unconfident_metrics(preds, labels):
@@ -171,21 +172,21 @@ def unknown_metrics(preds, labels):
 
     percent_unknown = correct_unknown / total_unknown
 
-    return percent_unknown
+    return percent_unknown, total_unknown
 
 
 def ood_metric(preds, labels, class_counts):
     # f1
     f1 = f_measure(preds, labels)
     # Confident
-    class_acc_confident, class_percent_confident, false_pos_percent = confident_metrics(preds, labels, class_counts)
+    class_acc_confident, class_percent_confident, false_pos_percent, total_known = confident_metrics(preds, labels, class_counts)
     # Unconfident
     class_wrong_unconfident = unconfident_metrics(preds, labels)
     # Open
-    percent_unknown = unknown_metrics(preds, labels)
+    percent_unknown, total_unknown = unknown_metrics(preds, labels)
     # Confident indices
     conf_preds = np.zeros(len(preds))
     conf_preds[preds != -1] = 1
-    return f1, class_acc_confident, class_percent_confident, false_pos_percent,\
-           class_wrong_unconfident, percent_unknown, conf_preds
+    return (f1, class_acc_confident, class_percent_confident, false_pos_percent,
+            class_wrong_unconfident, percent_unknown, total_unknown, total_known, conf_preds)
 

@@ -227,7 +227,7 @@ class PlainStage1(Algorithm):
         total_preds, total_labels, _ = self.evaluate_forward(loader, ood=False)
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
-        eval_info, mac_acc = self.evaluate_metric(total_preds, total_labels, loader_uni_class,
+        eval_info, mac_acc = self.evaluate_metric(total_preds, total_labels, 
                                                   eval_class_counts, ood=False)
         return eval_info, mac_acc
 
@@ -252,7 +252,7 @@ class PlainStage1(Algorithm):
         loader_uni_class = np.concatenate((loader_uni_class_out, loader_uni_class_in), axis=0)
         eval_class_counts = np.concatenate((eval_class_counts_out, eval_class_counts_in), axis=0)
 
-        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, loader_uni_class,
+        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, 
                                                          eval_class_counts, ood=True)
 
         return eval_info, f1, conf_preds
@@ -264,7 +264,7 @@ class PlainStage1(Algorithm):
         total_preds, total_labels, _ = self.evaluate_forward(loader, ood=True)
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
-        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, loader_uni_class,
+        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, 
                                                          eval_class_counts, ood=True)
         return eval_info, f1, conf_preds
 
@@ -299,14 +299,14 @@ class PlainStage1(Algorithm):
 
         return total_preds, total_labels, total_logits
 
-    def evaluate_metric(self, total_preds, total_labels, loader_uni_class, eval_class_counts, ood=False):
+    def evaluate_metric(self, total_preds, total_labels, eval_class_counts, ood=False):
         if ood:
             f1,\
             class_acc_confident, class_percent_confident, false_pos_percent,\
             class_wrong_percent_unconfident,\
-            percent_unknown, conf_preds = ood_metric(total_preds,
-                                                         total_labels,
-                                                         eval_class_counts)
+            percent_unknown, total_unknown, total_known, conf_preds = ood_metric(total_preds,
+                                                                                 total_labels,
+                                                                                 eval_class_counts)
 
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
@@ -319,9 +319,13 @@ class PlainStage1(Algorithm):
 
             eval_info += 'Overall F1: {:.3f} \n'.format(f1)
             eval_info += 'False positive %: {:.3f} \n'.format(false_pos_percent * 100)
-            eval_info += 'Selected unknown %: {:.3f} \n'.format(percent_unknown * 100)
+            eval_info += 'Selected unknown %: {:.3f} ({}/{}) \n'.format(percent_unknown * 100,
+                                                                        int(percent_unknown * total_unknown),
+                                                                        total_unknown)
 
-            eval_info += 'Avg conf %: {:.3f}; \n'.format(class_percent_confident.mean() * 100)
+            eval_info += 'Avg conf %: {:.3f} ({}/{}); \n'.format(class_percent_confident.mean() * 100,
+                                                                 int(class_percent_confident.mean() * total_known),
+                                                                 total_known)
             eval_info += 'Avg unconf wrong %: {:.3f}; \n'.format(class_wrong_percent_unconfident.mean() * 100)
             eval_info += 'Conf acc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
 

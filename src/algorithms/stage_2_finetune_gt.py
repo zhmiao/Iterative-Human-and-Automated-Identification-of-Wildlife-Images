@@ -98,6 +98,7 @@ class GTFineTuneStage2(PlainStage1):
         self.trainloader, self.valloader,\
         self.valloaderunknown, self.deployloader = load_data(args, self.conf_preds)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
+        self.train_annotation_counts = self.train_class_counts
 
     def train_epoch(self, epoch):
 

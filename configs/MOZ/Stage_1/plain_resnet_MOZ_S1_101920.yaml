@@ -9,10 +9,9 @@ limit_steps: 0
 dataset_root: /home/zhmiao/datasets/ecology
 dataset_name: MOZ_S1_LT
 unknown_dataset_name: MOZ_UNKNOWN
-deploy_dataset_name: MOZ_S2_LT
+deploy_dataset_name: MOZ_S2_LT_FULL
 class_indices: MOZ_S1_LT
 train_transform: MOZ
-train_split:  # Set to blank for full dataset
 batch_size: 64
 num_workers: 8
 

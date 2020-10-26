@@ -1,17 +1,16 @@
 import os
 import numpy as np
-from datetime import datetime
 from tqdm import tqdm
 
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, acc, stage_1_metric
+from .utils import register_algorithm
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
-from src.algorithms.stage_1_plain import load_data, PlainStage1
+from src.algorithms.stage_1_plain import PlainStage1
 
 
 @register_algorithm('EnergyStage1')
@@ -203,7 +202,7 @@ class EnergyStage1(PlainStage1):
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
         total_logits = np.concatenate(total_logits, axis=0)
-        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, loader_uni_class,
+        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels,
                                                          eval_class_counts, ood=True)
         return eval_info, f1, conf_preds, total_preds, total_logits
 
