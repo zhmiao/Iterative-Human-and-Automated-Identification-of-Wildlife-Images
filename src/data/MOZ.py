@@ -98,21 +98,47 @@ class MOZ_S3_ALL(Dataset):
         return sample, file_id
 
 
-class MOZ_ST2(MOZ):
+@register_dataset_obj('MOZ_S2_GTPS')
+class MOZ_S2_GTPS(MOZ):
 
-    def __init__(self, rootdir, class_indices, dset='train',
-                 transform=None, conf_preds=None, pseudo_labels=None, unconf_only=False, blur=False):
+    name = 'MOZ_S2_GTPS'
 
-        super(MOZ_ST2, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, 
-                                      transform=transform)
+    def __init__(self, rootdir, class_indices, dset='train', transform=None,
+                 conf_preds=None, pseudo_labels_hard=None, pseudo_labels_soft=None,
+                 GTPS_mode='GT', blur=False):
+
+        super(MOZ_S2_GTPS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset, 
+                                          transform=transform)
+
+        ann_dir = os.path.join(self.ann_root, '{}_mix_season_2_lt.txt'.format(self.dset))
+        self.load_data(ann_dir)
+
         self.conf_preds = conf_preds
-        self.pseudo_labels = pseudo_labels
+        self.pseudo_labels_hard = pseudo_labels_hard
+        self.pseudo_labels_soft = pseudo_labels_soft
         self.unconf_only = unconf_only
         self.blur = blur
+
         if self.blur:
             print('** USING BLURING **')
+
         if self.conf_preds is not None:
             print('Confidence prediction is not NONE.\n')
+
+        if GTPS_mode == 'both':
+            print('** LOADING BOTH GROUND TRUTH AND PSEUDO LABELS **')
+            assert pseudo_labels_hard is not None and pseudo_labels_soft is not None
+            self.pseudo_label_selection()
+        elif GTPS_mode == 'GT':
+            print('** LOADING ONLY GROUND TRUTH **')
+            self.pick_unconf()
+        elif GTPS_mode == 'PS':
+            print('** LOADING ONLY PSEUDO LABELS **')
+            assert pseudo_labels_hard is not None and pseudo_labels_soft is not None
+            self.pseudo_label_selection()
+            self.pick_conf()
+        elif GTPS_mode is None:
+            print('** NOT USING GTPS MODES **')
 
     def class_counts_cal_ann(self):
 
@@ -197,38 +223,6 @@ class MOZ_ST2(MOZ):
         else:
             return sample, label
 
-
-
-
-@register_dataset_obj('MOZ_S2_GTPS')
-class MOZ_S2_GTPS(MOZ_ST2):
-
-    name = 'MOZ_S2_GTPS'
-
-    def __init__(self, rootdir, class_indices, dset='train', 
-                 transform=None, conf_preds=None, pseudo_labels=None, GTPS_mode='both', blur=False):
-        super(MOZ_S2_GTPS, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                          transform=transform, conf_preds=conf_preds,
-                                          pseudo_labels=pseudo_labels, blur=blur)
-
-        ann_dir = os.path.join(self.ann_root, '{}_mix_season_2.txt'.format(self.dset))
-
-        self.load_data(ann_dir)
-
-        if GTPS_mode == 'both':
-            print('** LOADING BOTH GROUND TRUTH AND PSEUDO LABELS **')
-            assert pseudo_labels is not None
-            self.pseudo_label_selection()
-        elif GTPS_mode == 'GT':
-            print('** LOADING ONLY GROUND TRUTH **')
-            self.pick_unconf()
-        elif GTPS_mode == 'PS':
-            print('** LOADING ONLY PSEUDO LABELS **')
-            assert pseudo_labels is not None
-            self.pseudo_label_selection()
-            self.pick_conf()
-        elif GTPS_mode is None:
-            print('** NOT USING GTPS MODES **')
 
 
 class MOZ_ST2_SoftIter(MOZ):
@@ -389,48 +383,4 @@ class MOZ_S2_GTPS_SoftIter(MOZ_ST2_SoftIter):
             self.pick_conf()
         elif GTPS_mode is None:
             print('** NOT USING GTPS MODES **')
-
-
-@register_dataset_obj('MOZ_S2_LEFTOUT')
-class MOZ_S2_LEFTOUT(MOZ):
-
-    name = 'MOZ_S2_LEFTOUT'
-
-    def __init__(self, rootdir, class_indices, dset='train', transform=None):
-        super(MOZ_S2_LEFTOUT, self).__init__(rootdir=rootdir, class_indices=class_indices, dset=dset,
-                                             transform=transform)
-        ann_dir = os.path.join(self.ann_root, 'leftout_mix_new.txt')
-        self.load_data(ann_dir)
-
-    def load_data(self, ann_dir):
-        with open(ann_dir, 'r') as f:
-            for line in f:
-                line_sp = line.replace('\n', '').split(' ')
-
-                if line_sp[1] in self.class_indices.keys():
-                    label = self.class_indices[line_sp[1]]
-                else:
-                    label = -1
-
-                if line_sp[0] != 'Mozambique_season_1/Mongoose_large_gray/C06_2016_08_31_08_54_55.JPG':
-                    self.data.append(line_sp[0])
-                    self.labels.append(label)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
