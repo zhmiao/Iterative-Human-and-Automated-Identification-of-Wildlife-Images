@@ -19,6 +19,8 @@ parser.add_argument('--np_threads', default=4,
                     help='Num of threads of numpy.')
 parser.add_argument('--evaluate', default=False, action='store_true',
                     help='If evaluate the model.')
+parser.add_argument('--ood', default=False, action='store_true',
+                    help='If evaluate the model ood.')
 parser.add_argument('--deploy', default=False, action='store_true',
                     help='Actual model deployment.')
 parser.add_argument('--energy_ft', default=False, action='store_true',
@@ -65,7 +67,7 @@ alg = get_algorithm(args.algorithm, args)
 if args.evaluate:
     alg.set_eval()
     alg.logger.info('\nValidating...')
-    _ = alg.evaluate(loader=alg.valloader, ood=True)
+    _ = alg.evaluate(loader=alg.valloader, ood=args.ood)
 elif args.deploy:
     alg.set_eval()
     alg.logger.info('\nDeploying...')

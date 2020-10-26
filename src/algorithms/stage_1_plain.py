@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, acc, stage_1_metric
+from .utils import register_algorithm, Algorithm, acc, ood_metric
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
@@ -91,6 +91,7 @@ class PlainStage1(Algorithm):
         self.trainloader, self.valloader,\
         self.valloaderunknown, self.deployloader = load_data(args)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
+        self.train_annotation_counts = self.train_class_counts
 
     def set_train(self):
         ###########################
@@ -303,22 +304,22 @@ class PlainStage1(Algorithm):
             f1,\
             class_acc_confident, class_percent_confident, false_pos_percent,\
             class_wrong_percent_unconfident,\
-            percent_unknown, conf_preds = stage_1_metric(total_preds,
+            percent_unknown, conf_preds = ood_metric(total_preds,
                                                          total_labels,
-                                                         loader_uni_class,
                                                          eval_class_counts)
 
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
             for i in range(len(class_acc_confident)):
-                eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class[loader_uni_class != -1]][i])
-                eval_info += 'Confident percentage: {:.2f}; '.format(class_percent_confident[i] * 100)
-                eval_info += 'Unconfident wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
-                eval_info += 'Accuracy: {:.3f} \n'.format(class_acc_confident[i] * 100)
+                eval_info += 'Class {} (tr {} / '.format(i, self.train_class_counts[i])
+                eval_info += 'ann {}): '.format(self.train_annotation_counts[i])
+                eval_info += 'Conf %: {:.2f}; '.format(class_percent_confident[i] * 100)
+                eval_info += 'Unconf wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
+                eval_info += 'Conf Acc: {:.3f} \n'.format(class_acc_confident[i] * 100)
 
             eval_info += 'Overall F1: {:.3f} \n'.format(f1)
-            eval_info += 'False positive percentage: {:.3f} \n'.format(false_pos_percent * 100)
-            eval_info += 'Selected unknown percentage: {:.3f} \n'.format(percent_unknown * 100)
+            eval_info += 'False positive %: {:.3f} \n'.format(false_pos_percent * 100)
+            eval_info += 'Selected unknown %: {:.3f} \n'.format(percent_unknown * 100)
 
             eval_info += 'Avg conf %: {:.3f}; \n'.format(class_percent_confident.mean() * 100)
             eval_info += 'Avg unconf wrong %: {:.3f}; \n'.format(class_wrong_percent_unconfident.mean() * 100)
@@ -330,7 +331,8 @@ class PlainStage1(Algorithm):
 
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
             for i in range(len(class_acc)):
-                eval_info += 'Class {} (train counts {}):'.format(i, self.train_class_counts[loader_uni_class][i])
+                eval_info += 'Class {} (tr {} / '.format(i, self.train_class_counts[i])
+                eval_info += 'ann {}): '.format(self.train_annotation_counts[i])
                 eval_info += 'Acc {:.3f} \n'.format(class_acc[i] * 100)
 
             eval_info += 'Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(mac_acc * 100, mic_acc * 100)
