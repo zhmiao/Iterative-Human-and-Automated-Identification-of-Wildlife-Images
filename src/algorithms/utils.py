@@ -64,44 +64,6 @@ class Algorithm:
         pass
 
 
-class WarmupScheduler:
-    def __init__(self, optimizer, decay1, decay2, gamma, len_epoch, warmup_epochs=5, epi=1):
-        self.optimizer = optimizer
-        self.decay1 = decay1
-        self.decay2 = decay2
-        self.gamma = gamma
-        self.len_epoch = len_epoch
-        self.warmup_epochs = warmup_epochs
-        self.epi = epi
-        self.epoch = 1
-
-        self.init_lr_list = []
-        for param_group in self.optimizer.param_groups:
-            self.init_lr_list.append(deepcopy(param_group['lr']))
-
-    # def step(self, epoch, step):
-    def step(self):
-
-        """Sets the learning rate to the initial LR decayed by 10 every X epochs"""
-
-        for i, param_group in enumerate(self.optimizer.param_groups):
-
-            init_lr = self.init_lr_list[i]
-
-            if self.epoch < (self.warmup_epochs * self.epi):
-                lr = init_lr * self.epoch / self.warmup_epochs
-            elif self.epoch >= (self.decay2 * self.epi):
-                lr = init_lr * self.gamma * self.gamma
-            elif self.epoch >= (self.decay1 * self.epi):
-                lr = init_lr * self.gamma
-            else:
-                lr = init_lr
-
-            param_group['lr'] = lr
-
-        self.epoch += 1
-
-
 def acc(preds, labels, train_label_counts):
 
     class_counts_dict = {l: c for l, c in zip(*np.unique(labels, return_counts=True))}
@@ -275,52 +237,4 @@ def stage_2_metric(preds, max_probs, labels, train_unique_labels, theta):
            class_conf_correct / class_conf,\
            total_unconf,\
            missing_cls_in_test,\
-           missing_cls_in_train
-
-
-def stage_2_metric_dist(preds, min_dists, labels, train_unique_labels, min_dist_theta):
-
-    num_cls = len(train_unique_labels)
-
-    missing_cls_in_test = list(set(train_unique_labels) - set(np.unique(labels)))
-    missing_cls_in_train = list(set(np.unique(labels)) - set(train_unique_labels))
-
-    class_unconf_wrong = np.array([0. for _ in range(num_cls)])
-    class_unconf_correct = np.array([0. for _ in range(num_cls)])
-    class_conf_correct = np.array([0. for _ in range(num_cls)])
-
-    class_wrong = np.array([1e-7 for _ in range(num_cls)])
-    class_correct = np.array([1e-7 for _ in range(num_cls)])
-    class_conf = np.array([1e-7 for _ in range(num_cls)])
-
-    # Confident indices
-    conf_preds = np.zeros(len(preds))
-    conf_preds[min_dists < min_dist_theta] = 1
-    total_unconf = (conf_preds == 0).sum()
-
-    for i in range(len(preds)):
-
-        pred = preds[i]
-        label = labels[i]
-        conf = conf_preds[i]
-
-        if pred == label:
-            class_correct[label] += 1
-            if conf == 0:
-                class_unconf_correct[label] += 1
-            else:
-                class_conf_correct[label] += 1
-                class_conf[label] += 1
-        else:
-            class_wrong[label] += 1
-            if conf == 0:
-                class_unconf_wrong[label] += 1
-            else:
-                class_conf[label] += 1
-
-    return class_unconf_wrong / class_wrong, \
-           class_unconf_correct / class_correct, \
-           class_conf_correct / class_conf, \
-           total_unconf, \
-           missing_cls_in_test, \
            missing_cls_in_train
