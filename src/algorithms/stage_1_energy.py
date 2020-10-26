@@ -29,7 +29,6 @@ class EnergyStage1(PlainStage1):
         super(EnergyStage1, self).__init__(args=args)
 
     def set_train(self):
-
         self.trainloaderunknown = load_dataset(name='MOZ_UNKNOWN',
                                                class_indices=class_indices[self.args.class_indices],
                                                dset='train',
@@ -39,16 +38,24 @@ class EnergyStage1(PlainStage1):
                                                shuffle=True,
                                                num_workers=self.args.num_workers,
                                                cas_sampler=False)
-
-        ###########################
-        # Setup cuda and networks #
-        ###########################
         # setup network
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.logger.info('\nLoading from {}'.format(self.weights_path))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
+        self.set_optimizers()
 
+    def set_eval(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.logger.info('\nLoading from {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path.replace('.pth', '_ft.pth'), num_layers=self.args.num_layers,
+                             init_feat_only=False)
+
+    def set_optimizers(self):
         ######################
         # Optimization setup #
         ######################
@@ -77,16 +84,6 @@ class EnergyStage1(PlainStage1):
                 self.num_epochs * len(self.trainloader),
                 1,  # since lr_lambda computes multiplicative factor
                 1e-6 / self.args.lr_feature))
-
-    def set_eval(self):
-        ###############################
-        # Load weights for evaluation #
-        ###############################
-        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
-        self.logger.info('\nLoading from {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
-        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.weights_path.replace('.pth', '_ft.pth'), num_layers=self.args.num_layers,
-                             init_feat_only=False)
 
     def energy_ft(self):
         for epoch in range(self.num_epochs):

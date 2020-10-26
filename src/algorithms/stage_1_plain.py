@@ -102,6 +102,19 @@ class PlainStage1(Algorithm):
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True)
 
+        self.set_optimizers()
+
+    def set_eval(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.logger.info('\nLoading from {}'.format(self.weights_path))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
+
+    def set_optimizers(self):
+        self.logger.info('** SETTING OPTIMIZERS!!! **')
         ######################
         # Optimization setup #
         ######################
@@ -119,15 +132,6 @@ class PlainStage1(Algorithm):
         # Setup optimizer and optimizer scheduler
         self.opt_net = optim.SGD(net_optim_params_list)
         self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
-
-    def set_eval(self):
-        ###############################
-        # Load weights for evaluation #
-        ###############################
-        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
-        self.logger.info('\nLoading from {}'.format(self.weights_path))
-        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
 
     def train(self):
 
@@ -315,11 +319,11 @@ class PlainStage1(Algorithm):
                 eval_info += 'ann {}): '.format(self.train_annotation_counts[i])
                 eval_info += 'Conf %: {:.2f}; '.format(class_percent_confident[i] * 100)
                 eval_info += 'Unconf wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
-                eval_info += 'Conf Acc: {:.3f} \n'.format(class_acc_confident[i] * 100)
+                eval_info += 'Conf Acc: {:.3f}; \n'.format(class_acc_confident[i] * 100)
 
-            eval_info += 'Overall F1: {:.3f} \n'.format(f1)
-            eval_info += 'False positive %: {:.3f} \n'.format(false_pos_percent * 100)
-            eval_info += 'Selected unknown %: {:.3f} ({}/{}) \n'.format(percent_unknown * 100,
+            eval_info += 'Overall F1: {:.3f}; \n'.format(f1)
+            eval_info += 'False positive %: {:.3f}; \n'.format(false_pos_percent * 100)
+            eval_info += 'Selected unknown %: {:.3f} ({}/{}); \n'.format(percent_unknown * 100,
                                                                         int(percent_unknown * total_unknown),
                                                                         total_unknown)
 
@@ -327,7 +331,7 @@ class PlainStage1(Algorithm):
                                                                  int(class_percent_confident.mean() * total_known),
                                                                  total_known)
             eval_info += 'Avg unconf wrong %: {:.3f}; \n'.format(class_wrong_percent_unconfident.mean() * 100)
-            eval_info += 'Conf acc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
+            eval_info += 'Conf acc %: {:.3f}; \n'.format(class_acc_confident.mean() * 100)
 
             return eval_info, f1, conf_preds
         else:
