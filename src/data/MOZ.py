@@ -118,6 +118,10 @@ class MOZ_S2_LT_GTPS(MOZ):
         self.pseudo_labels_soft = pseudo_labels_soft
         self.blur = blur
 
+        # Count classes before messing up with labels
+        self.class_counts = self.class_counts_cal()
+        self.class_counts_ann = self.class_counts_cal_ann()
+
         if self.blur:
             print('** USING BLURING **')
 
@@ -140,23 +144,16 @@ class MOZ_S2_LT_GTPS(MOZ):
         else:
             print('Confidence prediction is NONE.\n')
             
-
     def class_counts_cal_ann(self):
-
-        if self.unconf_only:
-            _, ann_counts = self.class_counts_cal()
-            return ann_counts
-
-        else:
-            unique_labels = np.unique(self.labels)
-            unique_ann, unique_ann_counts = np.unique(np.array(self.labels)[np.array(self.conf_preds) == 0],
-                                                      return_counts=True)
-            temp_dic = {l: c for l, c in zip(unique_ann, unique_ann_counts)}
-            ann_counts = np.array([0 for _ in range(len(unique_labels))])
-            for l in unique_labels:
-                if l in temp_dic:
-                    ann_counts[l] = temp_dic[l]
-            return ann_counts
+        unique_labels = np.unique(self.labels)
+        unique_ann, unique_ann_counts = np.unique(np.array(self.labels)[np.array(self.conf_preds) == 0],
+                                                  return_counts=True)
+        temp_dic = {l: c for l, c in zip(unique_ann, unique_ann_counts)}
+        ann_counts = np.array([0 for _ in range(len(unique_labels))])
+        for l in unique_labels:
+            if l in temp_dic:
+                ann_counts[l] = temp_dic[l]
+        return ann_counts
 
     def pick_unconf(self):
         print('** PICKING GROUND TRUTHED DATA **')
@@ -214,14 +211,9 @@ class MOZ_S2_LT_GTPS(MOZ):
         if self.transform is not None:
             sample = self.transform(sample)
 
-        if self.conf_preds is not None:
-            if self.pseudo_labels_soft is not None:
-                soft_label = self.pseudo_labels_soft[index]
-                conf_pred = self.conf_preds[index]
-                return sample, label, torch.tensor(soft_label), conf_pred, index
-            else:
-                conf_pred = self.conf_preds[index]
-                return sample, label, conf_pred, index
+        if self.pseudo_labels_soft is not None:
+            soft_label = self.pseudo_labels_soft[index]
+            return sample, label, torch.tensor(soft_label)
         else:
             return sample, label
 
