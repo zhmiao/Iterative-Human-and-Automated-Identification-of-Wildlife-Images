@@ -19,7 +19,7 @@ num_workers: 4
 # model
 model_name: PlainSemiResNetClassifier
 num_layers: 50
-weights_init: ./weights/PlainStage1/101920_MOZ_S1_0.pth
+weights_init: ./weights/EnergyStage1/101920_MOZ_S1_0.pth
 
 # optim
 ## feature

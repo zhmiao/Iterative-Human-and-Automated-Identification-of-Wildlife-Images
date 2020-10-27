@@ -1,8 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.plain_resnet import PlainResNetClassifier
-
+from src.models.plain_resnet import PlainResNetClassifier
 from .utils import register_model
 
 

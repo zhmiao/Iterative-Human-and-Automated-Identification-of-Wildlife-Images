@@ -129,14 +129,12 @@ class MOZ_S2_LT_GTPS(MOZ):
             print('Confidence prediction is not NONE.\n')
             if GTPS_mode == 'both':
                 print('** LOADING BOTH GROUND TRUTH AND PSEUDO LABELS **')
-                assert pseudo_labels_hard is not None and pseudo_labels_soft is not None
                 self.pseudo_label_infusion()
             elif GTPS_mode == 'GT':
                 print('** LOADING ONLY GROUND TRUTH **')
                 self.pick_unconf()
             elif GTPS_mode == 'PS':
                 print('** LOADING ONLY PSEUDO LABELS **')
-                assert pseudo_labels_hard is not None and pseudo_labels_soft is not None
                 self.pseudo_label_infusion()
                 self.pick_conf()
             elif GTPS_mode is None:
