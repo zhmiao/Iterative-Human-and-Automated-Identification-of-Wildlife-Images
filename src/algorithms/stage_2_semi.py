@@ -185,10 +185,10 @@ class SemiStage2(PlainStage1):
         total_logits = np.concatenate(total_logits, axis=0)
         if soft_reset:
             self.logger.info("** Reseting soft pseudo labels **\n")
-            self.pseudo_labels_soft = np.concatenate(total_logits, axis=0)
+            self.pseudo_labels_soft = total_logits
         if hard_reset:
             self.logger.info("** Reseting hard pseudo labels **\n")
-            self.pseudo_labels_hard = np.concatenate(total_preds, axis=0)
+            self.pseudo_labels_hard = total_preds
 
     def train(self):
 
