@@ -335,7 +335,7 @@ class PlainStage1(Algorithm):
 
             return eval_info, f1, conf_preds
         else:
-            class_acc, mac_acc, mic_acc = acc(total_preds, total_labels, self.train_class_counts)
+            class_acc, mac_acc, mic_acc = acc(total_preds, total_labels)
 
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
             for i in range(len(class_acc)):

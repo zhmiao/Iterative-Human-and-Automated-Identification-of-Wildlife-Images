@@ -119,7 +119,7 @@ class MOZ_S2_LT_GTPS(MOZ):
         self.blur = blur
 
         # Count classes before messing up with labels
-        self.class_counts = self.class_counts_cal()
+        _, self.class_counts = self.class_counts_cal()
         self.class_counts_ann = self.class_counts_cal_ann()
 
         if self.blur:

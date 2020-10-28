@@ -13,7 +13,7 @@ unknown_dataset_name: MOZ_UNKNOWN
 deploy_dataset_name: MOZ_S3_ALL
 class_indices: MOZ_S2_LT
 train_transform: train_strong
-batch_size: 64
+batch_size: 96
 num_workers: 4
 
 # model

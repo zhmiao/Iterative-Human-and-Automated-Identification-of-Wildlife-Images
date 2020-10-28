@@ -198,7 +198,7 @@ class SemiStage2(PlainStage1):
 
         for semi_i in range(self.args.semi_iters):
 
-            for epoch in range(self.args.num_epochs - (10 * semi_i)):
+            for epoch in range(self.args.num_epochs):
 
                 self.train_epoch(semi_i, epoch, soft=(self.pseudo_labels_soft is not None))
 

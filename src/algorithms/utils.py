@@ -64,15 +64,11 @@ class Algorithm:
         pass
 
 
-def acc(preds, labels, train_label_counts):
+def acc(preds, labels):
 
-    class_counts_dict = {l: c for l, c in zip(*np.unique(labels, return_counts=True))}
+    _, label_counts = np.unique(labels, return_counts=True)
 
-    label_counts = np.array([class_counts_dict[c]
-                             if c in class_counts_dict else 1e-7 for c in
-                             range(len(train_label_counts))])
-
-    class_correct = np.array([0. for _ in range(len(train_label_counts))])
+    class_correct = np.array([0. for _ in range(len(label_counts))])
 
     for p, l in zip(preds, labels):
         if p == l:
