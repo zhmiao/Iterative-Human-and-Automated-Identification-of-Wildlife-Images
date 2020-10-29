@@ -38,7 +38,7 @@ class OLTRStage2(SemiStage2):
          self.trainloader_gt,
          self.trainloader_ps) = load_train_data(self.args, self.conf_preds, 
                                                 self.pseudo_labels_hard, self.pseudo_labels_soft, 
-                                                cas=False)
+                                                cas=cas)
 
     def set_train(self):
         # setup network
