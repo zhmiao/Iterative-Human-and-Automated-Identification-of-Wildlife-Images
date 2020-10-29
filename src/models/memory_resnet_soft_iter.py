@@ -12,13 +12,13 @@ from .utils import register_model, BaseModule
 from .resnet_backbone import ResNetFeature, BasicBlock, Bottleneck, model_urls
 
 
-@register_model('MemoryResNetClassifier_SoftIter')
-class MemoryResNetClassifier_SoftIter(BaseModule):
+@register_model('SoftOLTRResNetClassifier')
+class SoftOLTRResNetClassifier(BaseModule):
 
-    name = 'MemoryResNetClassifier_SoftIter'
+    name = 'SoftOLTRResNetClassifier'
 
     def __init__(self, num_cls=10, weights_init='ImageNet', num_layers=18, init_feat_only=True, T=None, alpha=None):
-        super(MemoryResNetClassifier_SoftIter, self).__init__()
+        super(SoftOLTRResNetClassifier, self).__init__()
         self.num_cls = num_cls
         self.num_layers = num_layers
         self.feature = None
@@ -169,12 +169,6 @@ class DiscCentroidsLoss(nn.Module):
         batch_size_tensor = feat.new_empty(1).fill_(batch_size if self.size_average else 1)
 
         loss_attract = self.disccentroidslossfunc(feat.clone(), label, self.centroids.clone(), batch_size_tensor).squeeze()
-
-        # centroids_batch = self.centroids.clone().index_select(0, label.long())
-        # 
-        # margin_attract = 10
-        # 
-        # loss_attract = ((feat.clone() - centroids_batch).pow(2).sum() / 2.0 - margin_attract) / batch_size
 
         ############################
         # calculate repelling loss #

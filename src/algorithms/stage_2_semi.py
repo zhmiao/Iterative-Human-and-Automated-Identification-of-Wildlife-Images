@@ -78,7 +78,7 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
                                   dset='train',
                                   transform=args.train_transform,
                                   rootdir=args.dataset_root,
-                                  batch_size=int(args.batch_size / 2),
+                                  batch_size=int(args.batch_size * 2 / 3),
                                   shuffle=True,
                                   num_workers=args.num_workers,
                                   cas_sampler=cas,
@@ -92,7 +92,7 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
                                   dset='train',
                                   transform=args.train_transform,
                                   rootdir=args.dataset_root,
-                                  batch_size=int(args.batch_size / 2),
+                                  batch_size=int(args.batch_size / 3),
                                   shuffle=True,
                                   num_workers=args.num_workers,
                                   cas_sampler=cas,
@@ -129,8 +129,8 @@ class SemiStage2(PlainStage1):
         #######################################
         self.valloader, self.valloaderunknown, self.deployloader = load_val_data(args)
 
-        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
-        self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('.pth', '_init_pseudo_hard.npy'), dtype=np.int)
+        self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
+        self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('_ft.pth', '_init_pseudo_hard.npy'), dtype=np.int)
         self.pseudo_labels_soft = None
 
         self.reset_trainloader()
@@ -179,16 +179,16 @@ class SemiStage2(PlainStage1):
 
     def pseudo_label_reset(self, loader, soft_reset=False, hard_reset=False):
         self.net.eval()
-        total_preds, total_labels, total_logits = self.evaluate_forward(loader, ood=False)
+        total_preds, total_labels, total_logits, conf_preds = self.evaluate_forward(loader, ood=False, out_conf=True)
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
         total_logits = np.concatenate(total_logits, axis=0)
         if soft_reset:
             self.logger.info("** Reseting soft pseudo labels **\n")
-            self.pseudo_labels_soft = total_logits
+            self.pseudo_labels_soft = total_logits[conf_preds == 1]
         if hard_reset:
             self.logger.info("** Reseting hard pseudo labels **\n")
-            self.pseudo_labels_hard = total_preds
+            self.pseudo_labels_hard = total_preds[conf_preds == 1]
 
     def train(self):
 
@@ -219,7 +219,7 @@ class SemiStage2(PlainStage1):
             # Reset pseudo labels
             self.pseudo_label_reset(self.trainloader_gtps, soft_reset=True, hard_reset=True)
             # Reset optimizers
-            self.set_optimizers(lr_factor=0.1)
+            self.set_optimizers(lr_factor=1.)
             # Reset training loaders
             self.reset_trainloader()
 
@@ -237,7 +237,7 @@ class SemiStage2(PlainStage1):
         iter_gt = iter(loader_gt)
         iter_ps = iter(loader_ps)
 
-        N = len(loader_ps)
+        N = len(self.trainloader_gtps)
 
         for batch_idx in range(N):
 
@@ -309,3 +309,43 @@ class SemiStage2(PlainStage1):
 
         self.scheduler.step()
 
+    def evaluate_forward(self, loader, ood=False, out_conf=False):
+        total_preds = []
+        total_labels = []
+        total_logits = []
+        total_energy_score = []
+
+        # Forward and record # correct predictions of each class
+        with torch.set_grad_enabled(False):
+
+            for data, labels in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data, labels = data.cuda(), labels.cuda()
+                data.requires_grad = False
+                labels.requires_grad = False
+
+                # forward
+                feats = self.net.feature(data)
+                logits = self.net.classifier(feats)
+
+                _, preds = F.softmax(logits, dim=1).max(dim=1)
+
+                energy_score = -(self.args.energy_T * torch.logsumexp(logits / self.args.energy_T, dim=1))
+
+                if ood:
+                    # Set unconfident prediction to -1
+                    preds[-energy_score <= self.args.energy_the] = -1
+
+                total_preds.append(preds.detach().cpu().numpy())
+                total_labels.append(labels.detach().cpu().numpy())
+                total_logits.append(logits.detach().cpu().numpy())
+                total_energy_score.append(energy_score.detach().cpu().numpy())
+
+        if out_conf:
+            total_energy_score = np.concatenate(total_energy_score, axis=0)
+            conf_preds = np.zeros(len(total_energy_score))
+            conf_preds[-total_energy_score > self.args.energy_the] = 1
+            return total_preds, total_labels, total_logits, conf_preds
+        else:
+            return total_preds, total_labels, total_logits

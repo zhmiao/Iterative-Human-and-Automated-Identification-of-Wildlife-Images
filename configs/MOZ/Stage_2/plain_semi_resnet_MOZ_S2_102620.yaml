@@ -1,7 +1,7 @@
 # training
 conf_id: 102620_MOZ_S2_SEMI
 algorithm: SemiStage2
-num_epochs: 30
+num_epochs: 40
 semi_iters: 2
 log_interval: 10
 limit_steps: 0
@@ -12,14 +12,14 @@ dataset_name: MOZ_S2_LT_GTPS
 unknown_dataset_name: MOZ_UNKNOWN
 deploy_dataset_name: MOZ_S3_ALL
 class_indices: MOZ_S2_LT
-train_transform: train_strong
+train_transform: MOZ
 batch_size: 96
 num_workers: 4
 
 # model
 model_name: PlainSemiResNetClassifier
 num_layers: 50
-weights_init: ./weights/EnergyStage1/101920_MOZ_S1_0.pth
+weights_init: ./weights/EnergyStage1/101920_MOZ_S1_0_ft.pth
 
 # optim
 ## feature
@@ -36,6 +36,8 @@ gamma: 0.1
 
 # confidence
 theta: 0.90
+energy_the: 13.7
+energy_T: 1.5
 
 # SoftIter
 T: 10  # Temperature
