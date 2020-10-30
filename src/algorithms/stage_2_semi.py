@@ -1,4 +1,5 @@
 import os
+from os import sep
 import numpy as np
 from datetime import datetime
 from tqdm import tqdm
@@ -53,7 +54,7 @@ def load_val_data(args):
 
     return valloader, valloaderunknown, deployloader
 
-def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, cas=False):
+def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, cas=False, separate=False):
 
     print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
 
@@ -73,35 +74,53 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
                                     pseudo_labels_soft=None,
                                     GTPS_mode='both')
 
-    trainloader_gt = load_dataset(name=args.dataset_name,
-                                  class_indices=cls_idx,
-                                  dset='train',
-                                  transform=args.train_transform,
-                                  rootdir=args.dataset_root,
-                                  batch_size=int(args.batch_size * 2 / 3),
-                                  shuffle=True,
-                                  num_workers=args.num_workers,
-                                  cas_sampler=cas,
-                                  conf_preds=conf_preds,
-                                  pseudo_labels_hard=pseudo_labels_hard,
-                                  pseudo_labels_soft=pseudo_labels_soft,
-                                  GTPS_mode='GT')
+    if separate:
+        trainloader_gt = load_dataset(name=args.dataset_name,
+                                      class_indices=cls_idx,
+                                      dset='train',
+                                      transform=args.train_transform,
+                                      rootdir=args.dataset_root,
+                                      batch_size=int(args.batch_size / 2),
+                                      shuffle=True,
+                                      num_workers=args.num_workers,
+                                      cas_sampler=cas,
+                                      conf_preds=conf_preds,
+                                      pseudo_labels_hard=pseudo_labels_hard,
+                                      pseudo_labels_soft=pseudo_labels_soft,
+                                      GTPS_mode='GT')
 
-    trainloader_ps = load_dataset(name=args.dataset_name,
-                                  class_indices=cls_idx,
-                                  dset='train',
-                                  transform=args.train_transform,
-                                  rootdir=args.dataset_root,
-                                  batch_size=int(args.batch_size / 3),
-                                  shuffle=True,
-                                  num_workers=args.num_workers,
-                                  cas_sampler=cas,
-                                  conf_preds=conf_preds,
-                                  pseudo_labels_hard=pseudo_labels_hard,
-                                  pseudo_labels_soft=pseudo_labels_soft,
-                                  GTPS_mode='PS')
+        trainloader_ps = load_dataset(name=args.dataset_name,
+                                      class_indices=cls_idx,
+                                      dset='train',
+                                      transform=args.train_transform,
+                                      rootdir=args.dataset_root,
+                                      batch_size=int(args.batch_size / 2),
+                                      shuffle=True,
+                                      num_workers=args.num_workers,
+                                      cas_sampler=cas,
+                                      conf_preds=conf_preds,
+                                      pseudo_labels_hard=pseudo_labels_hard,
+                                      pseudo_labels_soft=pseudo_labels_soft,
+                                      GTPS_mode='PS')
 
-    return trainloader_gtps, trainloader_gt, trainloader_ps
+        return trainloader_gtps, trainloader_gt, trainloader_ps
+
+    else:
+        trainloader_gtps_full = load_dataset(name=args.dataset_name,
+                                             class_indices=cls_idx,
+                                             dset='train',
+                                             transform=args.train_transform,
+                                             rootdir=args.dataset_root,
+                                             batch_size=args.batch_size,
+                                             shuffle=True,
+                                             num_workers=args.num_workers,
+                                             cas_sampler=cas,
+                                             conf_preds=conf_preds,
+                                             pseudo_labels_hard=pseudo_labels_hard,
+                                             pseudo_labels_soft=pseudo_labels_soft,
+                                             GTPS_mode='both')
+
+        return trainloader_gtps, trainloader_gtps_full
 
 @register_algorithm('SemiStage2')
 class SemiStage2(PlainStage1):
@@ -130,22 +149,33 @@ class SemiStage2(PlainStage1):
         self.valloader, self.valloaderunknown, self.deployloader = load_val_data(args)
 
         self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
-        self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('_ft.pth', '_init_pseudo_hard.npy'), dtype=np.int)
-        self.pseudo_labels_soft = None
+        self.pseudo_labels_hard_cur = np.fromfile(args.weights_init.replace('_ft.pth', '_init_pseudo_hard.npy'),
+                                                  dtype=np.int)
+        self.pseudo_labels_soft_cur = None
+        self.pseudo_labels_hard_best = self.pseudo_labels_hard_cur
+        self.pseudo_labels_soft_best = self.pseudo_labels_soft_cur
 
-        self.reset_trainloader()
+        self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_cur,
+                               pseudo_soft=self.pseudo_labels_soft_cur,
+                               separate=True)
 
         self.train_class_counts = self.trainloader_gtps.dataset.class_counts
         self.train_annotation_counts = self.trainloader_gtps.dataset.class_counts_ann
 
-    def reset_trainloader(self):
+    def reset_trainloader(self, pseudo_hard, pseudo_soft, cas=False, separate=False):
         self.logger.info('\nReseting training loader and sampler with pseudo labels.')
         self.logger.info('\nTRAINLOADER_NO_UP_GT....')
-        (self.trainloader_gtps,
-         self.trainloader_gt,
-         self.trainloader_ps) = load_train_data(self.args, self.conf_preds, 
-                                                self.pseudo_labels_hard, self.pseudo_labels_soft, 
-                                                cas=False)
+        if separate:
+            (self.trainloader_gtps,
+             self.trainloader_gt,
+             self.trainloader_ps) = load_train_data(self.args, self.conf_preds, 
+                                                    pseudo_hard, pseudo_soft, 
+                                                    cas=cas, separate=separate)
+        else:
+            (self.trainloader_gtps,
+             self.trainloader_gtps_full) = load_train_data(self.args, self.conf_preds, 
+                                                           pseudo_hard, pseudo_soft, 
+                                                           cas=cas, separate=separate)
 
     def set_train(self):
         # setup network
@@ -185,22 +215,37 @@ class SemiStage2(PlainStage1):
         total_logits = np.concatenate(total_logits, axis=0)
         if soft_reset:
             self.logger.info("** Reseting soft pseudo labels **\n")
-            self.pseudo_labels_soft = total_logits[conf_preds == 1]
+            if self.pseudo_labels_soft_cur is not None:
+                self.pseudo_labels_soft_cur[conf_preds == 1] = total_logits[conf_preds == 1]
+            else:
+                self.pseudo_labels_soft_cur = total_logits
         if hard_reset:
             self.logger.info("** Reseting hard pseudo labels **\n")
-            self.pseudo_labels_hard = total_preds[conf_preds == 1]
+            self.pseudo_labels_hard_cur[conf_preds == 1] = total_preds[conf_preds == 1]
 
     def train(self):
 
         best_semi_iter = 0
         best_epoch = 0
         best_acc = 0.
+        last_up = False
 
         for semi_i in range(self.args.semi_iters):
 
             for epoch in range(self.args.num_epochs):
+                if epoch <= 5:
+                    # Reset training loaders
+                    self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_cur,
+                                           pseudo_soft=self.pseudo_labels_soft_cur,
+                                           separate=True)
+                elif epoch == 6:
+                    self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_cur,
+                                           pseudo_soft=self.pseudo_labels_soft_cur,
+                                           separate=False)
 
-                self.train_epoch(semi_i, epoch, soft=(self.pseudo_labels_soft is not None))
+                self.train_epoch(semi_i, epoch, 
+                                 soft=(self.pseudo_labels_soft_cur is not None),
+                                 separate=(epoch <= 5))
 
                 # Validation
                 self.logger.info('\nValidation, semi-iteration {}.'.format(semi_i))
@@ -211,8 +256,28 @@ class SemiStage2(PlainStage1):
                     best_acc = val_acc_mac
                     best_epoch = epoch
                     best_semi_iter = semi_i
+
+                    # if last_up:
+                    #     self.logger.info('\nUpdating Best Pseudo Labels As Well!!')
+                    #     self.pseudo_labels_hard_best = self.pseudo_labels_hard_cur
+                    #     self.pseudo_labels_soft_best = self.pseudo_labels_soft_cur
+
+                    # Reset pseudo labels
+                if epoch <= 5:
+                    self.logger.info('\nUpdating Current Pseudo Labels..')
+                    self.pseudo_label_reset(self.trainloader_gtps,
+                                            soft_reset=(self.pseudo_labels_soft_cur is not None), 
+                                            hard_reset=True)
+                    # last_up = True
+                # else:
+                    # self.pseudo_labels_hard_cur = self.pseudo_labels_hard_best
+                    # self.pseudo_labels_soft_cur = self.pseudo_labels_soft_best
+                    # last_up = False
+                
+
                 self.logger.info('\nCurrrent Best Acc is {:.3f} at epoch {} semi-iter {}...'
                                  .format(best_acc * 100, best_epoch, best_semi_iter))
+
 
             # Revert to best weights
             self.net.load_state_dict(copy.deepcopy(self.net.best_weights))
@@ -227,17 +292,24 @@ class SemiStage2(PlainStage1):
                          .format(best_epoch, best_semi_iter, best_acc * 100))
         self.save_model()
 
-    def train_epoch(self, semi_i, epoch, soft=False):
+    def train_epoch(self, semi_i, epoch, soft=False, separate=False):
 
         self.net.train()
 
-        loader_gt = self.trainloader_gt
-        loader_ps = self.trainloader_ps
+        if separate:
+            loader_gt = self.trainloader_gt
+            loader_ps = self.trainloader_ps
 
-        iter_gt = iter(loader_gt)
-        iter_ps = iter(loader_ps)
+            iter_gt = iter(loader_gt)
+            iter_ps = iter(loader_ps)
 
-        N = len(self.trainloader_gtps)
+            N = max(len(self.trainloader_gtps) * 1.5, len(iter_ps))
+        
+        else:
+            loader_gtps_full = self.trainloader_gtps_full
+            iter_gtps_full = iter(loader_gtps_full)
+            N = len(self.trainloader_gtps_full)
+
 
         for batch_idx in range(N):
 
@@ -251,28 +323,44 @@ class SemiStage2(PlainStage1):
             ########################
             # Setup data variables #
             ########################
-            try:
-                input_gt = next(iter_gt)
-            except StopIteration:
-                iter_gt = iter(loader_gt)
-                input_gt = next(iter_gt)
+            if separate:
+                try:
+                    input_gt = next(iter_gt)
+                except StopIteration:
+                    iter_gt = iter(loader_gt)
+                    input_gt = next(iter_gt)
 
-            input_ps = next(iter_ps)
+                input_ps = next(iter_ps)
 
-            if soft:
-                data_gt, labels_gt, soft_target_gt = input_gt 
-                data_ps, labels_ps, soft_target_ps = input_ps
-                soft_target = torch.cat((soft_target_gt, soft_target_ps), dim=0).cuda()
-                soft_target.requires_grad = False
+                if soft:
+                    data_gt, labels_gt, soft_target_gt = input_gt 
+                    data_ps, labels_ps, soft_target_ps = input_ps
+                    soft_target = torch.cat((soft_target_gt, soft_target_ps), dim=0).cuda()
+                    soft_target.requires_grad = False
+                else:
+                    data_gt, labels_gt = input_gt 
+                    data_ps, labels_ps = input_ps
+                    soft_target = None
+
+                data = torch.cat((data_gt, data_ps), dim=0).cuda()
+                labels = torch.cat((labels_gt, labels_ps), dim=0).cuda()
+                data.requires_grad = False
+                labels.requires_grad = False
             else:
-                data_gt, labels_gt = input_gt 
-                data_ps, labels_ps = input_ps
-                soft_target = None
+                input_gtps_full = next(iter_gtps_full)
+                
+                if soft:
+                    data, labels, soft_target = input_gtps_full
+                    soft_target = soft_target.cuda()
+                    soft_target.requires_grad = False
+                else:
+                    data, labels = input_gtps_full
+                    soft_target = None
 
-            data = torch.cat((data_gt, data_ps), dim=0).cuda()
-            labels = torch.cat((labels_gt, labels_ps), dim=0).cuda()
-            data.requires_grad = False
-            labels.requires_grad = False
+                data = data.cuda()
+                labels = labels.cuda()
+                data.requires_grad = False
+                labels.requires_grad = False
 
             ####################
             # Forward and loss #
