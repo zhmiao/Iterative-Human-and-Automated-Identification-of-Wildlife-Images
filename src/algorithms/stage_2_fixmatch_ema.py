@@ -73,6 +73,29 @@ class EMAFixMatchStage2(FixMatchStage2):
             self.feature_ema.ema.load_state_dict(checkpoint['feature_ema'])
             self.classifier_ema.ema.load_state_dict(checkpoint['classifier_ema'])
 
+    def train(self):
+
+        best_epoch = 0
+        best_acc = 0.
+
+        for epoch in range(self.num_epochs):
+
+            # Training
+            self.train_epoch(epoch)
+
+            # Validation
+            self.logger.info('\nValidation.')
+            val_acc_mac = self.evaluate(self.valloader, ood=False)
+            if val_acc_mac > best_acc:
+                self.logger.info('\nUpdating Best Model Weights!!')
+                self.net.update_best()
+                best_acc = val_acc_mac
+                best_epoch = epoch
+                self.save_ema_model()
+
+        self.logger.info('\nBest Model Appears at Epoch {}...'.format(best_epoch))
+        self.save_model()
+
     def train_epoch(self, epoch):
 
         self.net.train()
@@ -145,6 +168,10 @@ class EMAFixMatchStage2(FixMatchStage2):
             self.opt_net.step()
             self.scheduler.step()
 
+            if self.args.ema:
+                self.feature_ema.update(self.net.feature)
+                self.classifier_ema.update(self.net.classifier)
+
             ###########
             # Logging #
             ###########
@@ -159,13 +186,54 @@ class EMAFixMatchStage2(FixMatchStage2):
                 info_str += 'Xent_l: {:.3f} Xent_u: {:.3f}'.format(loss_l.item(), loss_u.item())
                 self.logger.info(info_str)
 
-    def save_model(self):
-        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
-        self.logger.info('Saving to {}'.format(self.weights_path))
-        self.net.save(self.weights_path)
+    def evaluate_forward(self, loader, ood=False):
+        total_preds = []
+        total_labels = []
+        total_logits = []
 
-        if self.args.ema:
-            
+        # Forward and record # correct predictions of each class
+        with torch.set_grad_enabled(False):
+
+            for data, labels in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data, labels = data.cuda(), labels.cuda()
+                data.requires_grad = False
+                labels.requires_grad = False
+
+                # forward
+                if self.args.ema:
+                    feats = self.feature_ema(data)
+                    logits = self.classifier_ema(feats)
+                else:
+                    feats = self.net.feature(data)
+                    logits = self.net.classifier(feats)
+
+                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
+
+                # Set unconfident prediction to -1
+                if ood:
+                    preds[max_probs < self.args.theta] = -1
+
+                total_preds.append(preds.detach().cpu().numpy())
+                total_labels.append(labels.detach().cpu().numpy())
+                total_logits.append(logits.detach().cpu().numpy())
+
+        return total_preds, total_labels, total_logits
+
+    def save_ema_model(self):
+        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
+        self.logger.info('Saving EMA model to {}'.format(self.weights_path.replace('.pth', '_ema.pth')))
+
+        ema_states = {
+            'feature_ema': self.feature_ema.ema.module.state_dict() \
+                           if self.feature_ema.ema_has_module else self.feature_ema.ema.module.state_dict(),
+            'classifier_ema': self.classifier_ema.ema.state_dict() \
+                              if self.classifier_ema.ema_has_module else self.classifier_ema.ema.module.state_dict(),
+        }
+        
+        torch.save(ema_states, self.weights_path.replace('.pth', '_ema.pth'))
+        
 
 class ModelEMA(object):
     def __init__(self, lr, wdecay, model, decay):
