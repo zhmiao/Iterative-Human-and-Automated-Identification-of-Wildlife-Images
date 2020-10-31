@@ -12,7 +12,6 @@ unknown_dataset_name: MOZ_UNKNOWN
 deploy_dataset_name: MOZ_S3_ALL
 class_indices: MOZ_S2_LT
 train_transform: MOZ
-train_split:  # Set to blank for full dataset
 batch_size: 64
 num_workers: 4
 

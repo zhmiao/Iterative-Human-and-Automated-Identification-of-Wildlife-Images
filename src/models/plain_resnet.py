@@ -14,7 +14,7 @@ class PlainResNetClassifier(BaseModule):
 
     name = 'PlainResNetClassifier'
 
-    def __init__(self, num_cls=10, weights_init='ImageNet', num_layers=18, init_feat_only=True):
+    def __init__(self, num_cls=10, weights_init='ImageNet', num_layers=18, init_feat_only=True, parallel=False):
         super(PlainResNetClassifier, self).__init__()
         self.num_cls = num_cls
         self.num_layers = num_layers
@@ -33,7 +33,12 @@ class PlainResNetClassifier(BaseModule):
             self.load(weights_init, feat_only=init_feat_only)
         elif weights_init != 'ImageNet' and not os.path.exists(weights_init):
             raise NameError('Initial weights not exists {}.'.format(weights_init))
-
+        
+        if parallel:
+            print('**USING DATAPARALLEL**')
+            self.feature = nn.DataParallel(self.feature)
+            self.classifier = nn.DataParallel(self.classifier)
+        
         # Criteria setup
         self.setup_critera()
 
@@ -68,11 +73,12 @@ class PlainResNetClassifier(BaseModule):
             init_weights = torch.load(init_path)
 
         if feat_only:
-            init_weights = OrderedDict({k.replace('feature.', ''): init_weights[k] for k in init_weights})
+            init_weights = OrderedDict({k.replace('module.', '').replace('feature.', ''): init_weights[k] for k in init_weights})
             self.feature.load_state_dict(init_weights, strict=False)
             load_keys = set(init_weights.keys())
             self_keys = set(self.feature.state_dict().keys())
         else:
+            init_weights = OrderedDict({k.replace('module.', ''): init_weights[k] for k in init_weights})
             self.load_state_dict(init_weights, strict=False)
             load_keys = set(init_weights.keys())
             self_keys = set(self.state_dict().keys())

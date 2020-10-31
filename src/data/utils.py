@@ -6,26 +6,31 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
 from src.data.class_aware_sampler import ClassAwareSampler
+from src.data.randaugment import RandAugment
+
+class TransformFix(object):
+    def __init__(self, mean, std):
+        self.weak = transforms.Compose([
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+        ])
+        self.strong = transforms.Compose([
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            RandAugment(n=2, m=10)
+        ])
+        self.normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)])
+
+    def __call__(self, x):
+        weak = self.weak(x)
+        strong = self.strong(x)
+        return self.normalize(weak), self.normalize(strong)
+
 
 # Standard data transform with resize and typical augmentation
 data_transforms = {
-    'train': transforms.Compose([
-        # transforms.RandomResizedCrop(224, scale=(0.5, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
-        transforms.RandomResizedCrop(224, scale=(0.08, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-    'train_strong': transforms.Compose([
-        transforms.RandomGrayscale(p=0.1),
-        transforms.RandomResizedCrop(224, scale=(0.08, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(45, fill=(123, 116, 103)),
-        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
     'MOZ': transforms.Compose([
         # transforms.RandomResizedCrop(224, scale=(0.1, 1.0), ratio=(3. / 4., 4. / 3.)),
         transforms.RandomCrop(224),
@@ -34,6 +39,7 @@ data_transforms = {
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
+    'MOZ_Unlabeled': TransformFix([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     'eval': transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
