@@ -203,8 +203,8 @@ class EMAFixMatchStage2(FixMatchStage2):
 
                 # forward
                 if self.args.ema:
-                    feats = self.feature_ema(data)
-                    logits = self.classifier_ema(feats)
+                    feats = self.feature_ema.ema(data)
+                    logits = self.classifier_ema.ema(feats)
                 else:
                     feats = self.net.feature(data)
                     logits = self.net.classifier(feats)
