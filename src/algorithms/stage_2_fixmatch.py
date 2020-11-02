@@ -105,7 +105,8 @@ class FixMatchStage2(PlainStage1):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
+        # self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
+        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
 
         (self.trainloader_l, self.trainloader_u,
          self.valloader, self.valloaderunknown, self.deployloader) = load_data(args, cas=False,
@@ -123,7 +124,7 @@ class FixMatchStage2(PlainStage1):
         # setup network
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True,
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=False,
                              parallel=True)
 
         self.set_optimizers()

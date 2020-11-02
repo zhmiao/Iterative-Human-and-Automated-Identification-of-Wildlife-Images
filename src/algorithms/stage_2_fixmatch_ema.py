@@ -42,7 +42,7 @@ class EMAFixMatchStage2(FixMatchStage2):
         # setup network
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True,
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=False,
                              parallel=True)
 
         self.set_optimizers()
