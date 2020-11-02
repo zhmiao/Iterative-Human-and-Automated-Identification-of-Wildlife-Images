@@ -16,11 +16,25 @@ from src.models.utils import get_model
 from src.algorithms.stage_1_plain import PlainStage1
 
 
-def load_val_data(args):
+def load_val_data(args, conf_preds):
 
     print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
 
     cls_idx = class_indices[args.class_indices]
+
+    trainloader_eval = load_dataset(name=args.dataset_name,
+                                    class_indices=cls_idx,
+                                    dset='train',
+                                    transform='eval',
+                                    rootdir=args.dataset_root,
+                                    batch_size=args.batch_size,
+                                    shuffle=False,
+                                    num_workers=args.num_workers,
+                                    cas_sampler=False,
+                                    conf_preds=conf_preds,
+                                    pseudo_labels_hard=None,
+                                    pseudo_labels_soft=None,
+                                    GTPS_mode=None)
 
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
@@ -52,7 +66,7 @@ def load_val_data(args):
                                 num_workers=args.num_workers,
                                 cas_sampler=False)
 
-    return valloader, valloaderunknown, deployloader
+    return trainloader_eval, valloader, valloaderunknown, deployloader
 
 
 def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, cas=False):
@@ -61,26 +75,12 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
 
     cls_idx = class_indices[args.class_indices]
 
-    trainloader_gtps = load_dataset(name=args.dataset_name,
-                                    class_indices=cls_idx,
-                                    dset='train',
-                                    transform='eval',
-                                    rootdir=args.dataset_root,
-                                    batch_size=args.batch_size,
-                                    shuffle=False,
-                                    num_workers=args.num_workers,
-                                    cas_sampler=False,
-                                    conf_preds=conf_preds,
-                                    pseudo_labels_hard=pseudo_labels_hard,
-                                    pseudo_labels_soft=None,
-                                    GTPS_mode='both')
-
     trainloader_gt = load_dataset(name=args.dataset_name,
                                   class_indices=cls_idx,
                                   dset='train',
                                   transform=args.train_transform,
                                   rootdir=args.dataset_root,
-                                  batch_size=int(args.batch_size / 2),
+                                  batch_size=int(args.batch_size / 3),
                                   shuffle=True,
                                   num_workers=args.num_workers,
                                   cas_sampler=cas,
@@ -92,9 +92,9 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
     trainloader_ps = load_dataset(name=args.dataset_name,
                                   class_indices=cls_idx,
                                   dset='train',
-                                  transform=args.train_transform,
+                                 transform=args.train_transform + '_Unlabeled',
                                   rootdir=args.dataset_root,
-                                  batch_size=int(args.batch_size / 2),
+                                  batch_size=int(args.batch_size * 2 / 3),
                                   shuffle=True,
                                   num_workers=args.num_workers,
                                   cas_sampler=cas,
@@ -103,7 +103,7 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
                                   pseudo_labels_soft=pseudo_labels_soft,
                                   GTPS_mode='PS')
 
-    return trainloader_gtps, trainloader_gt, trainloader_ps
+    return trainloader_gt, trainloader_ps
 
 
 @register_algorithm('SemiStage2')
@@ -130,24 +130,24 @@ class SemiStage2(PlainStage1):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.valloader, self.valloaderunknown, self.deployloader = load_val_data(args)
+        # self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
+        self.conf_preds = list(np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_0_conf_preds.npy').astype(int))
+        (self.trainloader_eval, self.valloader, 
+         self.valloaderunknown, self.deployloader) = load_val_data(args, self.conf_preds)
 
-        self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
-        self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('_ft.pth', '_init_pseudo_hard.npy'),
+        self.pseudo_labels_hard = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_0_init_pseudo_hard.npy',
                                               dtype=np.int)
-        self.pseudo_labels_soft = None
+        # self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('_ft.pth', '_init_pseudo_hard.npy'),
+        #                                       dtype=np.int)
+        # self.pseudo_labels_soft = None
 
-        self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard,
-                               pseudo_soft=self.pseudo_labels_soft)
-
-        self.train_class_counts = self.trainloader_gtps.dataset.class_counts
-        self.train_annotation_counts = self.trainloader_gtps.dataset.class_counts_ann
+        self.train_class_counts = self.trainloader_eval.dataset.class_counts
+        self.train_annotation_counts = self.trainloader_eval.dataset.class_counts_ann
 
     def reset_trainloader(self, pseudo_hard, pseudo_soft, cas=False):
-        self.logger.info('\nReseting training loader and sampler with pseudo labels.')
+        self.logger.info('\nReseting training loaders with pseudo labels.')
         self.logger.info('\nTRAINLOADER_NO_UP_GT....')
-        (self.trainloader_gtps,
-         self.trainloader_gt,
+        (self.trainloader_gt,
          self.trainloader_ps) = load_train_data(self.args, self.conf_preds, 
                                                 pseudo_hard, pseudo_soft, cas=cas)
 
@@ -156,10 +156,20 @@ class SemiStage2(PlainStage1):
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
                              weights_init=self.args.weights_init,
-                             num_layers=self.args.num_layers, init_feat_only=True,
+                             num_layers=self.args.num_layers, init_feat_only=False,
                              T=self.args.T, alpha=self.args.alpha)
 
         self.set_optimizers(lr_factor=1.)
+
+        self.pseudo_labels_soft = None
+        self.pseudo_labels_hard = None
+
+        self.logger.info('\nUpdating Current Pseudo Labels..')
+        self.pseudo_label_reset(self.trainloader_eval, soft_reset=True, hard_reset=True)
+
+        self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard,
+                               pseudo_soft=self.pseudo_labels_soft)
+
 
     def set_optimizers(self, lr_factor=1.):
         self.logger.info('** SETTING OPTIMIZERS!!! **')
@@ -195,7 +205,10 @@ class SemiStage2(PlainStage1):
                 self.pseudo_labels_soft = total_logits
         if hard_reset:
             self.logger.info("** Reseting hard pseudo labels **\n")
-            self.pseudo_labels_hard[conf_preds == 1] = total_preds[conf_preds == 1]
+            if self.pseudo_labels_hard is not None:
+                self.pseudo_labels_hard[conf_preds == 1] = total_preds[conf_preds == 1]
+            else:
+                self.pseudo_labels_hard = total_preds
             pseudo_hard_path = self.weights_path.replace('.pth', '_pseudo_hard.npy')
             self.logger.info('Saving updated hard pseudo labels to {}'.format(pseudo_hard_path))
             self.pseudo_labels_hard.tofile(pseudo_hard_path)
@@ -220,18 +233,16 @@ class SemiStage2(PlainStage1):
 
                 # Reset pseudo labels
                 self.logger.info('\nUpdating Current Pseudo Labels..')
-                self.pseudo_label_reset(self.trainloader_gtps,
+                self.pseudo_label_reset(self.trainloader_eval,
                                         soft_reset=(self.pseudo_labels_soft is not None), 
                                         hard_reset=True)
 
             self.logger.info('\nCurrrent Best Acc is {:.3f} at epoch {}...'
                              .format(best_acc * 100, best_epoch))
 
-        self.logger.info('\nBest Model Appears at Epoch {} with Acc {:.3f}...'
-                         .format(best_epoch, best_acc * 100))
-
         self.save_model()
-        self.pseudo_label_reset(self.trainloader_gtps,
+
+        self.pseudo_label_reset(self.trainloader_eval,
                                 soft_reset=(self.pseudo_labels_soft is not None), 
                                 hard_reset=True)
 
@@ -245,7 +256,8 @@ class SemiStage2(PlainStage1):
         iter_gt = iter(loader_gt)
         iter_ps = iter(loader_ps)
 
-        N = max(len(self.trainloader_gtps) * 1.5, len(iter_ps))
+        # N = max(int(len(self.trainloader_eval) * 1.5), len(iter_ps))
+        N = len(iter_ps)
         
 
         for batch_idx in range(N):
@@ -322,6 +334,7 @@ class SemiStage2(PlainStage1):
         total_labels = []
         total_logits = []
         total_energy_score = []
+        total_probs = []
 
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
@@ -337,23 +350,28 @@ class SemiStage2(PlainStage1):
                 feats = self.net.feature(data)
                 logits = self.net.classifier(feats)
 
-                _, preds = F.softmax(logits, dim=1).max(dim=1)
+                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 
                 energy_score = -(self.args.energy_T * torch.logsumexp(logits / self.args.energy_T, dim=1))
 
                 if ood:
                     # Set unconfident prediction to -1
-                    preds[-energy_score <= self.args.energy_the] = -1
+                    # preds[-energy_score <= self.args.energy_the] = -1
+                    preds[max_probs < 0.9] = -1
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
                 total_logits.append(logits.detach().cpu().numpy())
                 total_energy_score.append(energy_score.detach().cpu().numpy())
+                total_probs.append(max_probs.detach().cpu().numpy())
 
         if out_conf:
-            total_energy_score = np.concatenate(total_energy_score, axis=0)
-            conf_preds = np.zeros(len(total_energy_score))
-            conf_preds[-total_energy_score > self.args.energy_the] = 1
+            # total_energy_score = np.concatenate(total_energy_score, axis=0)
+            total_probs = np.concatenate(total_probs, axis=0)
+            # conf_preds = np.zeros(len(total_energy_score))
+            conf_preds = np.zeros(len(total_probs))
+            # conf_preds[-total_energy_score > self.args.energy_the] = 1
+            conf_preds[total_probs >= 0.9] = 1
             return total_preds, total_labels, total_logits, conf_preds
         else:
             return total_preds, total_labels, total_logits

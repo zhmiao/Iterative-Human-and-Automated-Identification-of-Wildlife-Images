@@ -26,7 +26,8 @@ class TransformFix(object):
     def __call__(self, x):
         weak = self.weak(x)
         strong = self.strong(x)
-        return self.normalize(weak), self.normalize(strong)
+        # return self.normalize(weak), self.normalize(strong)
+        return self.normalize(strong)
 
 
 # Standard data transform with resize and typical augmentation

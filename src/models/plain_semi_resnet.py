@@ -29,7 +29,7 @@ class PlainSemiResNetClassifier(PlainResNetClassifier):
             _q = F.softmax(targets / T, dim=1)
 
             # _soft_loss = -torch.mean(torch.sum(_q * _p, dim=1))
-            _soft_loss = nn.KLDivLoss()(_p, _q)
+            _soft_loss = nn.KLDivLoss(reduction='batchmean')(_p, _q)
 
             # Soft hard combination
             _soft_loss = _soft_loss * T * T

@@ -1,7 +1,7 @@
 # training
 conf_id: 103120_MOZ_S2_SEMI
 algorithm: SemiStage2
-num_epochs: 2
+num_epochs: 30
 log_interval: 10
 limit_steps: 0
 
@@ -18,7 +18,8 @@ num_workers: 4
 # model
 model_name: PlainSemiResNetClassifier
 num_layers: 50
-weights_init: ./weights/EnergyStage1/101920_MOZ_S1_0_ft.pth
+# weights_init: ./weights/EnergyStage1/101920_MOZ_S1_0_ft.pth
+weights_init: ./weights/GTFineTuneStage2/102620_MOZ_S2_FT_GT_1.pth
 
 # optim
 ## feature
@@ -30,7 +31,7 @@ lr_classifier: 0.01
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
 ## lr_scheduler
-step_size: 15
+step_size: 10
 gamma: 0.1
 
 # confidence

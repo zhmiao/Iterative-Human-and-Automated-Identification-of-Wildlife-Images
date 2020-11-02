@@ -94,7 +94,7 @@ class GTFineTuneStage2(PlainStage1):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
+        self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
         self.trainloader, self.valloader,\
         self.valloaderunknown, self.deployloader = load_data(args, self.conf_preds)
         _, self.train_class_counts = self.trainloader.dataset.class_counts_cal()
@@ -106,7 +106,7 @@ class GTFineTuneStage2(PlainStage1):
 
         N = len(self.trainloader)
 
-        for batch_idx, (data, labels, _, _) in enumerate(self.trainloader):
+        for batch_idx, (data, labels) in enumerate(self.trainloader):
 
             # log basic adda train info
             info_str = '[FineTunine GT {} - Stage 2] Epoch: {} [{}/{} ({:.2f}%)] '.format(self.net.name, epoch, batch_idx,
