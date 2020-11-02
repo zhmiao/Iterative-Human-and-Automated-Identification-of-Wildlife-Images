@@ -54,6 +54,7 @@ def load_val_data(args):
 
     return valloader, valloaderunknown, deployloader
 
+
 def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, cas=False):
 
     print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
@@ -195,6 +196,9 @@ class SemiStage2(PlainStage1):
         if hard_reset:
             self.logger.info("** Reseting hard pseudo labels **\n")
             self.pseudo_labels_hard[conf_preds == 1] = total_preds[conf_preds == 1]
+            pseudo_hard_path = self.weights_path.replace('.pth', '_pseudo_hard.npy')
+            self.logger.info('Saving updated hard pseudo labels to {}'.format(pseudo_hard_path))
+            self.pseudo_labels_hard.tofile(pseudo_hard_path)
 
     def train(self):
 
@@ -227,6 +231,9 @@ class SemiStage2(PlainStage1):
                          .format(best_epoch, best_acc * 100))
 
         self.save_model()
+        self.pseudo_label_reset(self.trainloader_gtps,
+                                soft_reset=(self.pseudo_labels_soft is not None), 
+                                hard_reset=True)
 
     def train_epoch(self, epoch, soft=False):
 
