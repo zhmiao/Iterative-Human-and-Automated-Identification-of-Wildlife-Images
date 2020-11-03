@@ -9,7 +9,8 @@ from src.data.class_aware_sampler import ClassAwareSampler
 from src.data.randaugment import RandAugment
 
 class TransformFix(object):
-    def __init__(self, mean, std):
+    def __init__(self, mean, std, s_only=False):
+        self.s_only = s_only
         self.weak = transforms.Compose([
             transforms.RandomCrop(224),
             transforms.RandomHorizontalFlip(),
@@ -26,8 +27,11 @@ class TransformFix(object):
     def __call__(self, x):
         weak = self.weak(x)
         strong = self.strong(x)
-        # return self.normalize(weak), self.normalize(strong)
-        return self.normalize(strong)
+        if self.s_only:
+            return self.normalize(strong)
+        else:
+            return self.normalize(weak), self.normalize(strong)
+        # return self.normalize(strong)
 
 
 # Standard data transform with resize and typical augmentation
@@ -41,6 +45,7 @@ data_transforms = {
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
     'MOZ_Unlabeled': TransformFix([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    'MOZ_Pseudolabeled': TransformFix([0.485, 0.456, 0.406], [0.229, 0.224, 0.225], s_only=True),
     'eval': transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),

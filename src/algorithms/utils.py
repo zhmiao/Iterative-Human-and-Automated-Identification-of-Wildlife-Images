@@ -191,7 +191,7 @@ def ood_metric(preds, labels, class_counts):
 
 class LDAMLoss(nn.Module):
     
-    def __init__(self, cls_num_list, max_m=0.5, weight=None, s=30):
+    def __init__(self, cls_num_list, max_m=0.3, weight=None, s=30):
         super(LDAMLoss, self).__init__()
         m_list = 1.0 / np.sqrt(np.sqrt(cls_num_list))
         m_list = m_list * (max_m / np.max(m_list))
@@ -201,7 +201,7 @@ class LDAMLoss(nn.Module):
         self.s = s
         self.weight = weight
 
-    def forward(self, x, target):
+    def forward(self, x, target, reduction='mean'):
         index = torch.zeros_like(x, dtype=torch.uint8)
         index.scatter_(1, target.data.view(-1, 1), 1)
         
@@ -211,5 +211,4 @@ class LDAMLoss(nn.Module):
         x_m = x - batch_m
     
         output = torch.where(index, x_m, x)
-        return F.cross_entropy(self.s*output, target, weight=self.weight)
-        # return F.cross_entropy(output, target)
+        return F.cross_entropy(self.s*output, target, weight=self.weight, reduction=reduction)

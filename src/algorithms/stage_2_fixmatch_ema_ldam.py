@@ -13,37 +13,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import LambdaLR               
                
-from .utils import register_algorithm
+from .utils import register_algorithm, LDAMLoss
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
 from src.algorithms.stage_1_plain import PlainStage1
-from src.algorithms.stage_2_fixmatch_ema import load_data, EMAFixMatchStage2
-
-
-class LDAMLoss(nn.Module):
-    
-    def __init__(self, cls_num_list, max_m=0.5, weight=None, s=30):
-        super(LDAMLoss, self).__init__()
-        m_list = 1.0 / np.sqrt(np.sqrt(cls_num_list))
-        m_list = m_list * (max_m / np.max(m_list))
-        m_list = torch.cuda.FloatTensor(m_list)
-        self.m_list = m_list
-        assert s > 0
-        self.s = s
-        self.weight = weight
-
-    def forward(self, x, target):
-        index = torch.zeros_like(x, dtype=torch.uint8)
-        index.scatter_(1, target.data.view(-1, 1), 1)
-        
-        index_float = index.type(torch.cuda.FloatTensor)
-        batch_m = torch.matmul(self.m_list[None, :], index_float.transpose(0,1))
-        batch_m = batch_m.view((-1, 1))
-        x_m = x - batch_m
-    
-        output = torch.where(index, x_m, x)
-        return F.cross_entropy(self.s*output, target, weight=self.weight)
+from src.algorithms.stage_2_fixmatch_ema import load_data, EMAFixMatchStage2, ModelEMA
 
 
 @register_algorithm('LDAMEMAFixMatchStage2')
@@ -61,12 +36,41 @@ class LDAMEMAFixMatchStage2(EMAFixMatchStage2):
     def __init__(self, args):
         super(LDAMEMAFixMatchStage2, self).__init__(args=args)
 
+    def set_train(self):
+        ###########################
+        # Setup cuda and networks #
+        ###########################
+        # setup network
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True,
+                             norm=True, parallel=True)
+
+        self.set_optimizers()
+
+        if self.args.ema:
+            self.logger.info('\nGetting EMA model.')
+            self.feature_ema = ModelEMA(self.args.lr_feature, self.args.weight_decay_feature,
+                                        self.net.feature, decay=0.999)
+            self.classifier_ema = ModelEMA(self.args.lr_classifier, self.args.weight_decay_classifier,
+                                           self.net.classifier, decay=0.999)
+
     def train(self):
 
         best_epoch = 0
         best_acc = 0.
 
         for epoch in range(self.num_epochs):
+
+            idx = epoch // int(self.num_epochs / 2) 
+            betas = [0, 0.9999]
+            effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
+            per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
+            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
+            per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
+
+            self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.3, 
+                                              s=30, weight=per_cls_weights).cuda()
 
             # Training
             self.train_epoch(epoch)
@@ -141,7 +145,8 @@ class LDAMEMAFixMatchStage2(EMAFixMatchStage2):
 
             # calculate loss
             loss_l = self.net.criterion_cls(logits_l, labels_l)
-            loss_u = (F.cross_entropy(logits_u_s, targets_u, reduction='none') * mask).mean()
+            # loss_u = (F.cross_entropy(logits_u_s, targets_u, reduction='none') * mask).mean()
+            loss_u = (self.net.criterion_cls(logits_u_s, targets_u, reduction='none') * mask).mean()
 
             loss = loss_l + self.args.fixmatch_lambda * loss_u
             
@@ -174,74 +179,3 @@ class LDAMEMAFixMatchStage2(EMAFixMatchStage2):
                 info_str += 'Xent_l: {:.3f} Xent_u: {:.3f}'.format(loss_l.item(), loss_u.item())
                 self.logger.info(info_str)
 
-    def evaluate_forward(self, loader, ood=False):
-        total_preds = []
-        total_labels = []
-        total_logits = []
-
-        # Forward and record # correct predictions of each class
-        with torch.set_grad_enabled(False):
-
-            for data, labels in tqdm(loader, total=len(loader)):
-
-                # setup data
-                data, labels = data.cuda(), labels.cuda()
-                data.requires_grad = False
-                labels.requires_grad = False
-
-                # forward
-                if self.args.ema:
-                    feats = self.feature_ema.ema(data)
-                    logits = self.classifier_ema.ema(feats)
-                else:
-                    feats = self.net.feature(data)
-                    logits = self.net.classifier(feats)
-
-                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
-
-                # Set unconfident prediction to -1
-                if ood:
-                    preds[max_probs < self.args.theta] = -1
-
-                total_preds.append(preds.detach().cpu().numpy())
-                total_labels.append(labels.detach().cpu().numpy())
-                total_logits.append(logits.detach().cpu().numpy())
-
-        return total_preds, total_labels, total_logits
-
-    def save_ema_model(self):
-        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
-        self.logger.info('Saving EMA model to {}'.format(self.weights_path.replace('.pth', '_ema.pth')))
-
-        ema_states = {
-            'feature_ema': self.feature_ema.ema.module.state_dict() \
-                           if self.feature_ema.ema_has_module else self.feature_ema.ema.module.state_dict(),
-            'classifier_ema': self.classifier_ema.ema.state_dict() \
-                              if self.classifier_ema.ema_has_module else self.classifier_ema.ema.module.state_dict(),
-        }
-        
-        torch.save(ema_states, self.weights_path.replace('.pth', '_ema.pth'))
-        
-
-class ModelEMA(object):
-    def __init__(self, lr, wdecay, model, decay):
-        self.ema = copy.deepcopy(model).cuda()
-        self.ema.eval()
-        self.decay = decay
-        self.wd = lr * wdecay
-        self.ema_has_module = hasattr(self.ema, 'module')
-        for p in self.ema.parameters():
-            p.requires_grad_(False)
-
-    def update(self, model):
-        needs_module = hasattr(model, 'module') and not self.ema_has_module
-        with torch.no_grad():
-            msd = model.state_dict()
-            for k, ema_v in self.ema.state_dict().items():
-                if needs_module:
-                    k = 'module.' + k
-                model_v = msd[k].detach().cuda()
-                ema_v.copy_(ema_v * self.decay + (1. - self.decay) * model_v)
-                # weight decay
-                if 'bn' not in k:
-                    msd[k] = msd[k] * (1. - self.wd)

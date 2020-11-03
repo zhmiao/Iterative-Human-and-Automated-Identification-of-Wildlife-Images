@@ -7,29 +7,27 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
+from .utils import register_algorithm, LDAMLoss
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
-from src.algorithms.stage_1_plain import PlainStage1
-from src.algorithms.stage_2_finetune_gt import load_dataset, GTFineTuneStage2
-from src.algorithms.utils import LDAMLoss, register_algorithm
+from src.algorithms.stage_2_finetune_full import load_data, FullFineTuneStage2
 
 
-
-@register_algorithm('LDAMGTFineTuneStage2')
-class LDAMGTFineTuneStage2(GTFineTuneStage2):
+@register_algorithm('LDAMFullFineTuneStage2')
+class LDAMFullFineTuneStage2(FullFineTuneStage2):
 
     """
     Overall training function.
     """
 
-    name = 'LDAMGTFineTuneStage2'
+    name = 'LDAMFullFineTuneStage2'
     net = None
     opt_net = None
     scheduler = None
 
     def __init__(self, args):
-        super(LDAMGTFineTuneStage2, self).__init__(args=args)
+        super(LDAMFullFineTuneStage2, self).__init__(args=args)
 
     def set_train(self):
         ###########################

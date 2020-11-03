@@ -92,7 +92,7 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
     trainloader_ps = load_dataset(name=args.dataset_name,
                                   class_indices=cls_idx,
                                   dset='train',
-                                 transform=args.train_transform + '_Unlabeled',
+                                 transform=args.train_transform + '_Pseudolabeled',
                                   rootdir=args.dataset_root,
                                   batch_size=int(args.batch_size * 2 / 3),
                                   shuffle=True,
