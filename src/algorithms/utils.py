@@ -212,3 +212,4 @@ class LDAMLoss(nn.Module):
     
         output = torch.where(index, x_m, x)
         return F.cross_entropy(self.s*output, target, weight=self.weight)
+        # return F.cross_entropy(output, target)

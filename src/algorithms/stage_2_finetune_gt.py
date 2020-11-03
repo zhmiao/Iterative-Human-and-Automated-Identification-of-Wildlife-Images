@@ -109,8 +109,8 @@ class GTFineTuneStage2(PlainStage1):
         for batch_idx, (data, labels) in enumerate(self.trainloader):
 
             # log basic adda train info
-            info_str = '[FineTunine GT {} - Stage 2] Epoch: {} [{}/{} ({:.2f}%)] '.format(self.net.name, epoch, batch_idx,
-                                                                                          N, 100 * batch_idx / N)
+            info_str = '[LDAM FT GT {} - Stage 2] Epoch: {} [{}/{} ({:.2f}%)] '.format(self.net.name, epoch, batch_idx,
+                                                                                       N, 100 * batch_idx / N)
 
             ########################
             # Setup data variables #

@@ -7,13 +7,12 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import LDAMLoss, register_algorithm
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
 from src.algorithms.stage_1_plain import PlainStage1
 from src.algorithms.stage_2_finetune_gt import load_dataset, GTFineTuneStage2
-from src.algorithms.utils import LDAMLoss
+from src.algorithms.utils import LDAMLoss, register_algorithm
 
 
 
@@ -32,13 +31,25 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
     def __init__(self, args):
         super(LDAMGTFineTuneStage2, self).__init__(args=args)
 
+    def set_train(self):
+        ###########################
+        # Setup cuda and networks #
+        ###########################
+        # setup network
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers, init_feat_only=True,
+                             norm=True)
+
+        self.set_optimizers()
+
     def train(self):
 
         best_epoch = 0
         best_acc = 0.
 
         for epoch in range(self.num_epochs):
-
+            
             idx = epoch // int(self.num_epochs / 2) 
             betas = [0, 0.9999]
             effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)

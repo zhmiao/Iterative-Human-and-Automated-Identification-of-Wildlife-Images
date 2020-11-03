@@ -3,6 +3,7 @@ from . import stage_1_plain
 from . import stage_1_energy
 from . import stage_2_finetune_full
 from . import stage_2_finetune_gt
+from . import stage_2_finetune_gt_ldam
 from . import stage_2_fixmatch
 from . import stage_2_fixmatch_ema
 from . import stage_2_pslabel
