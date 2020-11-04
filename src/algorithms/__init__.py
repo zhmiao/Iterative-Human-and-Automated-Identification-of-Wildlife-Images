@@ -11,6 +11,7 @@ from . import stage_2_fixmatch_ema_ldam
 from . import stage_2_pslabel
 from . import stage_2_pslabel_ldam
 from . import stage_2_pslabel_ldam_tune
+from . import stage_2_pslabel_ldam_tune2
 # from . import plain_stage_2
 # from . import memory_stage_2
 # from . import memory_stage_2_conf_pseu

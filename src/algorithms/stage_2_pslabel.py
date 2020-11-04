@@ -161,8 +161,8 @@ class SemiStage2(PlainStage1):
 
         self.set_optimizers(lr_factor=1.)
 
-        self.pseudo_labels_soft = None
-        self.pseudo_labels_hard = None
+        # self.pseudo_labels_soft = None
+        # self.pseudo_labels_hard = None
 
         self.logger.info('\nUpdating Current Pseudo Labels..')
         self.pseudo_label_reset(self.trainloader_eval, soft_reset=True, hard_reset=True)
