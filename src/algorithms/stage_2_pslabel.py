@@ -139,7 +139,7 @@ class SemiStage2(PlainStage1):
                                               dtype=np.int)
         # self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('_ft.pth', '_init_pseudo_hard.npy'),
         #                                       dtype=np.int)
-        # self.pseudo_labels_soft = None
+        self.pseudo_labels_soft = None
 
         self.train_class_counts = self.trainloader_eval.dataset.class_counts
         self.train_annotation_counts = self.trainloader_eval.dataset.class_counts_ann
@@ -357,7 +357,7 @@ class SemiStage2(PlainStage1):
                 if ood:
                     # Set unconfident prediction to -1
                     # preds[-energy_score <= self.args.energy_the] = -1
-                    preds[max_probs < 0.9] = -1
+                    preds[max_probs < self.args.theta] = -1
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
@@ -371,7 +371,7 @@ class SemiStage2(PlainStage1):
             # conf_preds = np.zeros(len(total_energy_score))
             conf_preds = np.zeros(len(total_probs))
             # conf_preds[-total_energy_score > self.args.energy_the] = 1
-            conf_preds[total_probs >= 0.9] = 1
+            conf_preds[total_probs >= self.args.theta] = 1
             return total_preds, total_labels, total_logits, conf_preds
         else:
             return total_preds, total_labels, total_logits

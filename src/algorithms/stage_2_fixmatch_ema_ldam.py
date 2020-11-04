@@ -55,6 +55,47 @@ class LDAMEMAFixMatchStage2(EMAFixMatchStage2):
             self.classifier_ema = ModelEMA(self.args.lr_classifier, self.args.weight_decay_classifier,
                                            self.net.classifier, decay=0.999)
 
+    def set_optimizers(self, lr_factor=1.):
+        self.logger.info('** SETTING OPTIMIZERS!!! **')
+        ######################
+        # Optimization setup #
+        ######################
+         
+        # Setup optimizer parameters for each network component
+        net_optim_params_list = [
+            {'params': self.net.feature.parameters(),
+             'lr': self.args.lr_feature * lr_factor,
+             'momentum': self.args.momentum_feature,
+             'weight_decay': self.args.weight_decay_feature,
+             'nesterov': True},
+            {'params': self.net.classifier.parameters(),
+             'lr': self.args.lr_classifier * lr_factor,
+             'momentum': self.args.momentum_classifier,
+             'weight_decay': self.args.weight_decay_classifier,
+             'nesterov': True}
+        ]
+
+        def cosine_scheduler(optimizer,
+                             num_warmup_steps,
+                             num_training_steps,
+                             num_cycles=7./16.,
+                             last_epoch=-1):
+            def _lr_lambda(current_step):
+                if current_step < num_warmup_steps:
+                    return float(current_step) / float(max(1, num_warmup_steps))
+                no_progress = float(current_step - num_warmup_steps) / \
+                    float(max(1, num_training_steps - num_warmup_steps))
+                return max(0., math.cos(math.pi * num_cycles * no_progress))
+
+            return LambdaLR(optimizer, _lr_lambda, last_epoch)
+
+        # Setup optimizer and optimizer scheduler
+        self.opt_net = optim.SGD(net_optim_params_list)
+        # self.scheduler = cosine_scheduler(optimizer=self.opt_net,
+        #                                   num_warmup_steps=5 * self.train_iterations,
+        #                                   num_training_steps=self.args.num_epochs * self.train_iterations)
+        self.scheduler = optim.lr_scheduler.StepLR(self.opt_net, step_size=self.args.step_size, gamma=self.args.gamma)
+
     def train(self):
 
         best_epoch = 0
@@ -62,7 +103,7 @@ class LDAMEMAFixMatchStage2(EMAFixMatchStage2):
 
         for epoch in range(self.num_epochs):
 
-            idx = epoch // int(self.num_epochs / 2) 
+            idx = epoch // int(self.num_epochs * 2 / 3) 
             betas = [0, 0.9999]
             effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
             per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
