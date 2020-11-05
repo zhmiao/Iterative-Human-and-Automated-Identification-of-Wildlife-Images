@@ -101,7 +101,7 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 
                 betas = [0, 0.9999]
 
-                if epoch % 3 == 0:
+                if epoch % 5 == 0:
                     self.logger.info('\nUSING DRW..')
                     self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_tail,
                                            pseudo_soft=None)
