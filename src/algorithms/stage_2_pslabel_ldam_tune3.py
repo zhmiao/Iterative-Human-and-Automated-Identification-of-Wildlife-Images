@@ -117,7 +117,7 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
                 per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
 
-                self.net.criterion_cls_hard = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.5, 
+                self.net.criterion_cls_hard = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.7, 
                                                        s=30, weight=per_cls_weights).cuda()
 
                 self.train_epoch(epoch, soft=(self.pseudo_labels_soft is not None))
