@@ -61,7 +61,7 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
                 per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
                 per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
 
-                self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.3, 
+                self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.5, 
                                                   s=30, weight=per_cls_weights).cuda()
             
             # idx = epoch // int(self.num_epochs / 2) 
