@@ -161,9 +161,9 @@ class PlainStage1(Algorithm):
             self.logger.info(eval_info)
             return f1
         else:
-            eval_info, eval_acc_mac = self.evaluate_epoch(loader)
+            eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader)
             self.logger.info(eval_info)
-            return eval_acc_mac
+            return eval_acc_mac, eval_acc_mic
 
     def deploy(self, loader):
         eval_info, f1, conf_preds = self.deploy_epoch(loader)
@@ -231,9 +231,9 @@ class PlainStage1(Algorithm):
         total_preds, total_labels, _ = self.evaluate_forward(loader, ood=False)
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
-        eval_info, mac_acc = self.evaluate_metric(total_preds, total_labels, 
+        eval_info, mac_acc, mic_acc = self.evaluate_metric(total_preds, total_labels, 
                                                   eval_class_counts, ood=False)
-        return eval_info, mac_acc
+        return eval_info, mac_acc, mic_acc
 
     def ood_evaluate_epoch(self, loader_in, loader_out):
         self.net.eval()
@@ -344,7 +344,7 @@ class PlainStage1(Algorithm):
                 eval_info += 'Acc {:.3f} \n'.format(class_acc[i] * 100)
 
             eval_info += 'Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(mac_acc * 100, mic_acc * 100)
-            return eval_info, mac_acc
+            return eval_info, mac_acc, mic_acc
 
     def save_model(self):
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)

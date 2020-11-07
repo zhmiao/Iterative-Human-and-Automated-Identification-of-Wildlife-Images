@@ -88,7 +88,8 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
     def train(self):
 
         best_epoch = 0
-        best_acc = 0.
+        best_acc_mac = 0.
+        best_acc_mic = 0.
         best_semi_iter = 0
 
         for semi_i in range(self.args.semi_iters):
@@ -102,22 +103,22 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 betas = [0, 0.9999]
 
                 if epoch % 3 == 0:
+                    idx = 1 
                     self.logger.info('\nUSING DRW..')
                     self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_tail,
                                            pseudo_soft=None)
-                    idx = 1 
                 else:
+                    idx = 0
                     self.logger.info('\nNO DRW..')
                     self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_head,
                                            pseudo_soft=None)
-                    idx = 0
 
                 effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
                 per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
                 per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
                 per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
 
-                self.net.criterion_cls_hard = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=1.0, 
+                self.net.criterion_cls_hard = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.7, 
                                                        s=30, weight=per_cls_weights).cuda()
 
 
@@ -125,16 +126,17 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
 
                 # Validation
                 self.logger.info('\nValidation.')
-                val_acc_mac = self.evaluate(self.valloader, ood=False)
-                if val_acc_mac > best_acc:
+                val_acc_mac, val_acc_mic = self.evaluate(self.valloader, ood=False)
+                if val_acc_mac > best_acc_mac and val_acc_mic > 82:
                     self.logger.info('\nUpdating Best Model Weights!!')
                     self.net.update_best()
-                    best_acc = val_acc_mac
+                    best_acc_mac = val_acc_mac
+                    best_acc_mic = val_acc_mic
                     best_epoch = epoch
                     best_semi_iter = semi_i
 
-                self.logger.info('\nCurrrent Best Acc is {:.3f} at epoch {} semi-iter {}...'
-                                 .format(best_acc * 100, best_epoch, best_semi_iter))
+                self.logger.info('\nCurrrent Best Mac Acc is {:.3f} (mic {:.3f}) at epoch {} semi-iter {}...'
+                                 .format(best_acc_mac * 100, best_acc_mic * 100, best_epoch, best_semi_iter))
 
             self.save_model()
 
@@ -155,5 +157,5 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
             # Reseting optimizers
             self.set_optimizers(lr_factor=1.)
 
-            self.logger.info('\nBest Model Appears at Epoch {} Semi-iteration {} with Acc {:.3f}...'
-                             .format(best_epoch, best_semi_iter, best_acc * 100))
+            self.logger.info('\nCurrrent Best Mac Acc is {:.3f} (mic {:.3f}) at epoch {} semi-iter {}...'
+                             .format(best_acc_mac * 100, best_acc_mic * 100, best_epoch, best_semi_iter))
