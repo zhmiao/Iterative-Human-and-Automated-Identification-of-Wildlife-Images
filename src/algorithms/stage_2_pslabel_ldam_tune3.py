@@ -106,20 +106,19 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                     self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_tail,
                                            pseudo_soft=None)
                     idx = 1 
-                    effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
-                    per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
-                    per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
-                    per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
-
-                    self.net.criterion_cls_hard = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.5, 
-                                                           s=30, weight=per_cls_weights).cuda()
-
                 else:
                     self.logger.info('\nNO DRW..')
                     self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_head,
                                            pseudo_soft=None)
                     idx = 0
-                    self.net.criterion_cls_hard = nn.CrossEntropyLoss() 
+
+                effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
+                per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
+                per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
+                per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
+
+                self.net.criterion_cls_hard = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=1.0, 
+                                                       s=30, weight=per_cls_weights).cuda()
 
 
                 self.train_epoch(epoch, soft=(self.pseudo_labels_soft is not None))
