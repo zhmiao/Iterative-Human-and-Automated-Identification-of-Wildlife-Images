@@ -127,13 +127,22 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 # Validation
                 self.logger.info('\nValidation.')
                 val_acc_mac, val_acc_mic = self.evaluate(self.valloader, ood=False)
-                if val_acc_mac > best_acc_mac and val_acc_mic > 82:
-                    self.logger.info('\nUpdating Best Model Weights!!')
-                    self.net.update_best()
-                    best_acc_mac = val_acc_mac
-                    best_acc_mic = val_acc_mic
-                    best_epoch = epoch
-                    best_semi_iter = semi_i
+                if semi_i > 0:  
+                    if val_acc_mac > best_acc_mac and val_acc_mic > 0.82:
+                        self.logger.info('\nUpdating Best Model Weights!!')
+                        self.net.update_best()
+                        best_acc_mac = val_acc_mac
+                        best_acc_mic = val_acc_mic
+                        best_epoch = epoch
+                        best_semi_iter = semi_i
+                else:
+                    if val_acc_mac > best_acc_mac:
+                        self.logger.info('\nUpdating Best Model Weights!!')
+                        self.net.update_best()
+                        best_acc_mac = val_acc_mac
+                        best_acc_mic = val_acc_mic
+                        best_epoch = epoch
+                        best_semi_iter = semi_i
 
                 self.logger.info('\nCurrrent Best Mac Acc is {:.3f} (mic {:.3f}) at epoch {} semi-iter {}...'
                                  .format(best_acc_mac * 100, best_acc_mic * 100, best_epoch, best_semi_iter))
