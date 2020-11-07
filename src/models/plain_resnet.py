@@ -98,6 +98,7 @@ class PlainResNetClassifier(BaseModule):
 
     def save(self, out_path):
         torch.save(self.best_weights, out_path)
+        torch.save(self.state_dict, out_path.replace('.pth', '_final.pth'))
 
     def update_best(self):
         self.best_weights = copy.deepcopy(self.state_dict())
