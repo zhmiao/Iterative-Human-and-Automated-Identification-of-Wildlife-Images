@@ -119,7 +119,7 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
 
                 self.net.criterion_cls_hard = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.7, 
-                                                       s=50, weight=per_cls_weights).cuda()
+                                                       s=30, weight=per_cls_weights).cuda()
 
 
                 self.train_epoch(epoch, soft=(self.pseudo_labels_soft is not None))
@@ -127,22 +127,14 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 # Validation
                 self.logger.info('\nValidation.')
                 val_acc_mac, val_acc_mic = self.evaluate(self.valloader, ood=False)
-                if semi_i > 0:  
-                    if val_acc_mac > best_acc_mac and val_acc_mic > 0.82:
-                        self.logger.info('\nUpdating Best Model Weights!!')
-                        self.net.update_best()
-                        best_acc_mac = val_acc_mac
-                        best_acc_mic = val_acc_mic
-                        best_epoch = epoch
-                        best_semi_iter = semi_i
-                else:
-                    if val_acc_mac > best_acc_mac:
-                        self.logger.info('\nUpdating Best Model Weights!!')
-                        self.net.update_best()
-                        best_acc_mac = val_acc_mac
-                        best_acc_mic = val_acc_mic
-                        best_epoch = epoch
-                        best_semi_iter = semi_i
+                if ((val_acc_mac > best_acc_mac and val_acc_mic > 0.82 and semi_i > 0) 
+                    or (val_acc_mac > best_acc_mac and semi_i == 0)):
+                    self.logger.info('\nUpdating Best Model Weights!!')
+                    self.net.update_best()
+                    best_acc_mac = val_acc_mac
+                    best_acc_mic = val_acc_mic
+                    best_epoch = epoch
+                    best_semi_iter = semi_i
 
                 self.logger.info('\nCurrrent Best Mac Acc is {:.3f} (mic {:.3f}) at epoch {} semi-iter {}...'
                                  .format(best_acc_mac * 100, best_acc_mic * 100, best_epoch, best_semi_iter))
