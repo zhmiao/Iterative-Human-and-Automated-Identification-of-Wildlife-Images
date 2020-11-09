@@ -88,7 +88,7 @@ class EnergyStage1(PlainStage1):
     def energy_ft(self):
         for epoch in range(self.num_epochs):
             # Training
-            self.ood_ft_epoch(epoch)
+            self.energy_ft_epoch(epoch)
             # Validation
             self.logger.info('\nValidation.')
             _ = self.evaluate(self.valloader, ood=True)
