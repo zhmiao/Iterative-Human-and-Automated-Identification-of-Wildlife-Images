@@ -41,7 +41,6 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
         #######################################
         # Setup data for training and testing #
         #######################################
-        # self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
         self.conf_preds = list(np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_0_conf_preds.npy').astype(int))
         (self.trainloader_eval, self.valloader, 
          self.valloaderunknown, self.deployloader) = load_val_data(args, self.conf_preds)
@@ -65,6 +64,16 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
 
         self.set_optimizers(lr_factor=1.)
 
+    def set_eval(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.logger.info('\nLoading from {}'.format(self.weights_path))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False,
+                             norm=True)
+
     def pseudo_label_reset(self, loader):
         self.net.eval()
         total_preds, total_labels, total_logits, conf_preds = self.evaluate_forward(loader, ood=False, out_conf=True)
@@ -80,10 +89,6 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
             self.pseudo_labels_hard_tail[conf_preds == 1] = total_preds[conf_preds == 1]
         else:
             self.pseudo_labels_hard_tail = total_preds
-
-        # pseudo_hard_path = self.weights_path.replace('.pth', '_pseudo_hard.npy')
-        # self.logger.info('Saving updated hard pseudo labels to {}'.format(pseudo_hard_path))
-        # self.pseudo_labels_hard.tofile(pseudo_hard_path)
 
     def train(self):
 
@@ -127,8 +132,7 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 # Validation
                 self.logger.info('\nValidation.')
                 val_acc_mac, val_acc_mic = self.evaluate(self.valloader, ood=False)
-                if ((val_acc_mac > best_acc_mac and val_acc_mic > 0.82 and semi_i > 0) 
-                    or (val_acc_mac > best_acc_mac and semi_i == 0)):
+                if val_acc_mac > best_acc_mac: 
                     self.logger.info('\nUpdating Best Model Weights!!')
                     self.net.update_best()
                     best_acc_mac = val_acc_mac
@@ -160,3 +164,43 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
 
             self.logger.info('\nCurrrent Best Mac Acc is {:.3f} (mic {:.3f}) at epoch {} semi-iter {}...'
                              .format(best_acc_mac * 100, best_acc_mic * 100, best_epoch, best_semi_iter))
+
+    def evaluate_forward(self, loader, ood=False, out_conf=False):
+        total_preds = []
+        total_labels = []
+        total_logits = []
+        total_probs = []
+
+        # Forward and record # correct predictions of each class
+        with torch.set_grad_enabled(False):
+
+            for data, labels in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data, labels = data.cuda(), labels.cuda()
+                data.requires_grad = False
+                labels.requires_grad = False
+
+                # forward
+                feats = self.net.feature(data)
+                logits = self.net.classifier(feats)
+
+                # 30 is the LDAM constant 's'
+                max_probs, preds = F.softmax(logits * 30, dim=1).max(dim=1)
+
+                if ood:
+                    # Set unconfident prediction to -1
+                    preds[max_probs < self.args.theta] = -1
+
+                total_preds.append(preds.detach().cpu().numpy())
+                total_labels.append(labels.detach().cpu().numpy())
+                total_logits.append(logits.detach().cpu().numpy())
+                total_probs.append(max_probs.detach().cpu().numpy())
+
+        if out_conf:
+            total_probs = np.concatenate(total_probs, axis=0)
+            conf_preds = np.zeros(len(total_probs))
+            conf_preds[total_probs >= self.args.theta] = 1
+            return total_preds, total_labels, total_logits, conf_preds
+        else:
+            return total_preds, total_labels, total_logits

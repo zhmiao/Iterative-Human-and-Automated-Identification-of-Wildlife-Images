@@ -170,7 +170,6 @@ class SemiStage2(PlainStage1):
         self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard,
                                pseudo_soft=self.pseudo_labels_soft)
 
-
     def set_optimizers(self, lr_factor=1.):
         self.logger.info('** SETTING OPTIMIZERS!!! **')
         ######################
@@ -333,7 +332,6 @@ class SemiStage2(PlainStage1):
         total_preds = []
         total_labels = []
         total_logits = []
-        total_energy_score = []
         total_probs = []
 
         # Forward and record # correct predictions of each class
@@ -352,25 +350,18 @@ class SemiStage2(PlainStage1):
 
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 
-                energy_score = -(self.args.energy_T * torch.logsumexp(logits / self.args.energy_T, dim=1))
-
                 if ood:
                     # Set unconfident prediction to -1
-                    # preds[-energy_score <= self.args.energy_the] = -1
                     preds[max_probs < self.args.theta] = -1
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
                 total_logits.append(logits.detach().cpu().numpy())
-                total_energy_score.append(energy_score.detach().cpu().numpy())
                 total_probs.append(max_probs.detach().cpu().numpy())
 
         if out_conf:
-            # total_energy_score = np.concatenate(total_energy_score, axis=0)
             total_probs = np.concatenate(total_probs, axis=0)
-            # conf_preds = np.zeros(len(total_energy_score))
             conf_preds = np.zeros(len(total_probs))
-            # conf_preds[-total_energy_score > self.args.energy_the] = 1
             conf_preds[total_probs >= self.args.theta] = 1
             return total_preds, total_labels, total_logits, conf_preds
         else:
