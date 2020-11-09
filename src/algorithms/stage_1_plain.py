@@ -145,7 +145,7 @@ class PlainStage1(Algorithm):
 
             # Validation
             self.logger.info('\nValidation.')
-            val_acc_mac = self.evaluate(self.valloader, ood=False)
+            val_acc_mac, _ = self.evaluate(self.valloader, ood=False)
             if val_acc_mac > best_acc:
                 self.logger.info('\nUpdating Best Model Weights!!')
                 self.net.update_best()
