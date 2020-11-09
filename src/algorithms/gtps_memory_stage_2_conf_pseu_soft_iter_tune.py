@@ -106,8 +106,8 @@ def load_data(args, conf_preds):
     return trainloader_no_up, trainloader_cent, testloader, valloader, deployloader, deployloader_ood
 
 
-@register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter_TUNE')
-class GTPSMemoryStage2_ConfPseu_SoftIter_TUNE(PlainMemoryStage2_ConfPseu):
+@register_algorithm('OLTR_PS')
+class OLTR(PlainMemoryStage2_ConfPseu):
 
     """
     Overall training function.

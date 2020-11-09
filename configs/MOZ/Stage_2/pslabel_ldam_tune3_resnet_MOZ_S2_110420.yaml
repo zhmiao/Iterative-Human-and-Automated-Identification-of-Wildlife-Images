@@ -36,9 +36,9 @@ step_size: 10
 gamma: 0.1
 
 # confidence
-theta: 0.90 
+theta: 0.9
 # energy_the: 13.7
-energy_the: 15
+energy_the: 17
 energy_T: 1.5
 
 # SoftIter

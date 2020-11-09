@@ -70,7 +70,5 @@ class_indices['MOZ_S2_LT'] = {
     'Guineafowl_crested': 37,
     'Eland': 38,
     'Lion': 39,
-    'Mongoose_dwarf': 40,
-    'Serval': 41,
-    'Human': 42
+    'Serval': 40
 }

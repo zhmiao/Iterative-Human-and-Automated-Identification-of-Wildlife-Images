@@ -140,6 +140,13 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                     best_epoch = epoch
                     best_semi_iter = semi_i
 
+                    # Reseting pseudo labels with best model
+                    self.pseudo_label_reset(self.trainloader_eval)
+
+                    # Reseting train loaders with new pseudolabels 
+                    self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard,
+                                           pseudo_soft=self.pseudo_labels_soft)
+
                 self.logger.info('\nCurrrent Best Mac Acc is {:.3f} (mic {:.3f}) at epoch {} semi-iter {}...'
                                  .format(best_acc_mac * 100, best_acc_mic * 100, best_epoch, best_semi_iter))
 
@@ -185,8 +192,29 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 feats = self.net.feature(data)
                 logits = self.net.classifier(feats)
 
-                # 30 is the LDAM constant 's'
-                max_probs, preds = F.softmax(logits * 30, dim=1).max(dim=1)
+                # _, preds = logits.max(dim=1)
+
+                # max_m = 0.7
+                # s = 30
+
+                # m_list = 1.0 / np.sqrt(np.sqrt(self.train_annotation_counts))
+                # m_list = m_list * (max_m / np.max(m_list))
+                # m_list = torch.cuda.FloatTensor(m_list)
+
+                # index = torch.zeros_like(logits, dtype=torch.uint8)
+                # index.scatter_(1, preds.data.view(-1, 1), 1)
+
+                # index_float = index.type(torch.cuda.FloatTensor)
+                # batch_m = torch.matmul(m_list[None, :], index_float.transpose(0,1))
+                # batch_m = batch_m.view((-1, 1))
+                # x_m = logits - batch_m
+
+                # output = torch.where(index, x_m, logits)
+
+                # scaled_logits = s * output
+
+                # max_probs, preds = F.softmax(scaled_logits, dim=1).max(dim=1)
+                max_probs, preds = F.softmax(14 * logits, dim=1).max(dim=1)
 
                 if ood:
                     # Set unconfident prediction to -1

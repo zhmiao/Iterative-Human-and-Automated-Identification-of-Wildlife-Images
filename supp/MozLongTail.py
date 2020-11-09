@@ -18,6 +18,7 @@ rename = {
     'Hippopotamus': 'Hippo',
     'Sable': 'Sable_antelope',
     'Ground_hornbill': 'Hornbill_ground',
+    'Human': 'Setup',
 }
 
 # %% codecell
@@ -99,18 +100,16 @@ def category_selection(label_list, min_count):
                for cat, count in zip(unique_labels[label_counts >= min_count], label_counts[label_counts >= min_count])
                if 'nknown' not in cat
                and 'other' not in cat
-               and 'Rodent' not in cat]
-               # and cat not in ['Ghost', 'Rodent']]
-               # and cat not in ['Ghost', 'Human', 'Fire', 'Setup', 'Rodent']]
+               and 'Rodent' not in cat
+               and 'Mongoose_dwarf' not in cat]
 
     cat_leftout = [(cat, count)
                    for cat, count in zip(unique_labels, label_counts)
                    if 'nknown' in cat
                    or 'other' in cat
                    or count < min_count
-                   or 'Rodent' in cat]
-                   # or cat in ['Ghost', 'Rodent']
-                   # or cat in ['Ghost', 'Human', 'Fire', 'Setup', 'Rodent']
+                   or 'Rodent' in cat
+                   or 'Mongoose_dwarf' in cat]
 
     cat_sel = sorted(cat_sel, key=lambda x : x[1], reverse=True)
     cat_leftout = sorted(cat_leftout, key=lambda x : x[1], reverse=True)
@@ -142,7 +141,7 @@ cat_leftout_counts_all
 
 # %% codecell
 tr_ood_list = open(os.path.join(root, 'SplitLists', 'train_mix_ood.txt'), 'w')
-te_ood_list = open(os.path.join(root, 'SplitLists', 'test_mix_ood.txt'), 'w')
+te_ood_list = open(os.path.join(root, 'SplitLists', 'val_mix_ood.txt'), 'w')
 for cat_id, (cat, count) in tqdm(enumerate(cat_leftout_counts_all), total=len(cat_leftout_counts_all)):
     # Select category files, labels, and shooting seconds
     file_sel = file_list_all[label_list_all == cat]
@@ -203,9 +202,9 @@ te_ood_list.close()
 # %% codecell
 
 tr_s1_list = open(os.path.join(root, 'SplitLists', 'train_mix_season_1_lt.txt'), 'w')
-te_s1_list = open(os.path.join(root, 'SplitLists', 'test_mix_season_1_lt.txt'), 'w')
+te_s1_list = open(os.path.join(root, 'SplitLists', 'val_mix_season_1_lt.txt'), 'w')
 tr_s2_list = open(os.path.join(root, 'SplitLists', 'train_mix_season_2_lt.txt'), 'w')
-te_s2_list = open(os.path.join(root, 'SplitLists', 'test_mix_season_2_lt.txt'), 'w')
+te_s2_list = open(os.path.join(root, 'SplitLists', 'val_mix_season_2_lt.txt'), 'w')
 
 for cat_id, (cat, count) in tqdm(enumerate(cat_sel_counts_all), total=len(cat_sel_counts_all)):
 
@@ -308,6 +307,26 @@ te_s2_list.close()
 
 # %% codecell
 paths_tr_s1, labels_tr_s1 = read_lists(os.path.join(root, 'SplitLists', 'train_mix_season_1_lt.txt'))
-paths_te_s1, labels_te_s1 = read_lists(os.path.join(root, 'SplitLists', 'test_mix_season_1_lt.txt'))
+paths_te_s1, labels_te_s1 = read_lists(os.path.join(root, 'SplitLists', 'val_mix_season_1_lt.txt'))
 paths_tr_s2, labels_tr_s2 = read_lists(os.path.join(root, 'SplitLists', 'train_mix_season_2_lt.txt'))
-paths_te_s2, labels_te_s2 = read_lists(os.path.join(root, 'SplitLists', 'test_mix_season_2_lt.txt'))
+paths_te_s2, labels_te_s2 = read_lists(os.path.join(root, 'SplitLists', 'val_mix_season_2_lt.txt'))
+
+# %% codecell
+check_list = []
+
+with open(os.path.join(root, 'SplitLists', 'val_mix_season_2_lt.txt'), 'r') as f:
+
+        for line in tqdm(f):
+
+            line = line.replace('\n', '')
+            line_sp = line.split(' ')
+            file = line_sp[0]
+            label = line_sp[1]
+
+            if label == 'Mongoose_dwarf':
+                check_list.append(file)
+
+# %%
+Image.open(os.path.join(root, random.choice(check_list)))
+
+# %%
