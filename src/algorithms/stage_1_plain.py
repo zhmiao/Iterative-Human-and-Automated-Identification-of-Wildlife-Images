@@ -232,7 +232,7 @@ class PlainStage1(Algorithm):
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
         eval_info, mac_acc, mic_acc = self.evaluate_metric(total_preds, total_labels, 
-                                                  eval_class_counts, ood=False)
+                                                           eval_class_counts, ood=False)
         return eval_info, mac_acc, mic_acc
 
     def ood_evaluate_epoch(self, loader_in, loader_out):

@@ -18,7 +18,7 @@ num_workers: 4
 # model
 model_name: PlainResNetClassifier
 num_layers: 50
-weights_init: ./weights/EnergyStage1/101920_MOZ_S1_0_ft.pth
+weights_init: ./weights/EnergyStage1/101920_MOZ_S1_1_ft.pth
 
 # optim
 ## feature

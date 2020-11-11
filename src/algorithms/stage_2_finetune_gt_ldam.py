@@ -64,22 +64,12 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
                 self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.3, 
                                                   s=30, weight=per_cls_weights).cuda()
             
-            # idx = epoch // int(self.num_epochs / 2) 
-            # betas = [0, 0.9999]
-            # effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
-            # per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
-            # per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
-            # per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
-
-            # self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.3, 
-            #                                   s=30, weight=per_cls_weights).cuda()
-
             # Training
             self.train_epoch(epoch)
 
             # Validation
             self.logger.info('\nValidation.')
-            val_acc_mac = self.evaluate(self.valloader, ood=False)
+            val_acc_mac, val_acc_mic = self.evaluate(self.valloader, ood=False)
             if val_acc_mac > best_acc:
                 self.logger.info('\nUpdating Best Model Weights!!')
                 self.net.update_best()

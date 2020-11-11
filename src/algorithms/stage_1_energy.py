@@ -86,14 +86,19 @@ class EnergyStage1(PlainStage1):
                 1e-6 / self.args.lr_feature))
 
     def energy_ft(self):
+        best_f1 = 0
         for epoch in range(self.num_epochs):
             # Training
             self.energy_ft_epoch(epoch)
             # Validation
             self.logger.info('\nValidation.')
-            _ = self.evaluate(self.valloader, ood=True)
-            self.logger.info('\nUpdating Best Model Weights!!')
-            self.net.update_best()
+            f1 = self.evaluate(self.valloader, ood=True)
+            
+            if f1 > best_f1:
+                self.logger.info('\nUpdating Best Model Weights!!')
+                self.net.update_best()
+                best_f1 = f1
+
         os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
         self.logger.info('Saving to {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
         self.net.save(self.weights_path.replace('.pth', '_ft.pth'))

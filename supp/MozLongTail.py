@@ -323,7 +323,7 @@ with open(os.path.join(root, 'SplitLists', 'val_mix_season_2_lt.txt'), 'r') as f
             file = line_sp[0]
             label = line_sp[1]
 
-            if label == 'Mongoose_dwarf':
+            if label == 'Guineafowl_helmeted':
                 check_list.append(file)
 
 # %%

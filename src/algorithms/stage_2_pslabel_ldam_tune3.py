@@ -41,11 +41,11 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.conf_preds = list(np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_0_conf_preds.npy').astype(int))
+        self.conf_preds = list(np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_1_conf_preds.npy').astype(int))
         (self.trainloader_eval, self.valloader, 
          self.valloaderunknown, self.deployloader) = load_val_data(args, self.conf_preds)
 
-        self.pseudo_labels_hard_head = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_0_init_pseudo_hard.npy',
+        self.pseudo_labels_hard_head = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_1_init_pseudo_hard.npy',
                                                    dtype=np.int)
         self.pseudo_labels_hard_tail = None
 
@@ -140,12 +140,12 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                     best_epoch = epoch
                     best_semi_iter = semi_i
 
-                    # Reseting pseudo labels with best model
-                    self.pseudo_label_reset(self.trainloader_eval)
+                    # # Reseting pseudo labels with best model
+                    # self.pseudo_label_reset(self.trainloader_eval)
 
-                    # Reseting train loaders with new pseudolabels 
-                    self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard,
-                                           pseudo_soft=self.pseudo_labels_soft)
+                    # # Reseting train loaders with new pseudolabels 
+                    # self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard,
+                    #                        pseudo_soft=self.pseudo_labels_soft)
 
                 self.logger.info('\nCurrrent Best Mac Acc is {:.3f} (mic {:.3f}) at epoch {} semi-iter {}...'
                                  .format(best_acc_mac * 100, best_acc_mic * 100, best_epoch, best_semi_iter))
@@ -156,7 +156,7 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
             self.net.load_state_dict(copy.deepcopy(self.net.best_weights))
 
             # Get original pseudo labels
-            self.pseudo_labels_hard = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_0_init_pseudo_hard.npy',
+            self.pseudo_labels_hard = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_1_init_pseudo_hard.npy',
                                                   dtype=np.int)
 
             # Reseting pseudo labels with best model
@@ -214,6 +214,7 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 # scaled_logits = s * output
 
                 # max_probs, preds = F.softmax(scaled_logits, dim=1).max(dim=1)
+                # max_probs, preds = F.softmax(14 * logits, dim=1).max(dim=1)
                 max_probs, preds = F.softmax(14 * logits, dim=1).max(dim=1)
 
                 if ood:
