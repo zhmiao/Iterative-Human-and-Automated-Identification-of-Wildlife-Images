@@ -82,11 +82,12 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
         total_logits = np.concatenate(total_logits, axis=0)
 
         self.logger.info("** Reseting head pseudo labels **\n")
-        self.pseudo_labels_hard_head[conf_preds == 1] = total_preds[conf_preds == 1]
+        # self.pseudo_labels_hard_head[conf_preds == 1] = total_preds[conf_preds == 1]
         
         self.logger.info("** Reseting head pseudo labels **\n")
         if self.pseudo_labels_hard_tail is not None:
-            self.pseudo_labels_hard_tail[conf_preds == 1] = total_preds[conf_preds == 1]
+            pass
+            # self.pseudo_labels_hard_tail[conf_preds == 1] = total_preds[conf_preds == 1]
         else:
             self.pseudo_labels_hard_tail = total_preds
 
@@ -192,30 +193,7 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 feats = self.net.feature(data)
                 logits = self.net.classifier(feats)
 
-                # _, preds = logits.max(dim=1)
-
-                # max_m = 0.7
-                # s = 30
-
-                # m_list = 1.0 / np.sqrt(np.sqrt(self.train_annotation_counts))
-                # m_list = m_list * (max_m / np.max(m_list))
-                # m_list = torch.cuda.FloatTensor(m_list)
-
-                # index = torch.zeros_like(logits, dtype=torch.uint8)
-                # index.scatter_(1, preds.data.view(-1, 1), 1)
-
-                # index_float = index.type(torch.cuda.FloatTensor)
-                # batch_m = torch.matmul(m_list[None, :], index_float.transpose(0,1))
-                # batch_m = batch_m.view((-1, 1))
-                # x_m = logits - batch_m
-
-                # output = torch.where(index, x_m, logits)
-
-                # scaled_logits = s * output
-
-                # max_probs, preds = F.softmax(scaled_logits, dim=1).max(dim=1)
-                # max_probs, preds = F.softmax(14 * logits, dim=1).max(dim=1)
-                max_probs, preds = F.softmax(14 * logits, dim=1).max(dim=1)
+                max_probs, preds = F.softmax(30 * logits, dim=1).max(dim=1)
 
                 if ood:
                     # Set unconfident prediction to -1
