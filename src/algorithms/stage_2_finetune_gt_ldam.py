@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from datetime import datetime
+from torch import log
 from tqdm import tqdm
 
 import torch
@@ -52,8 +53,10 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
         for epoch in range(self.num_epochs):
 
             if epoch % 3 == 0 or epoch < 3:
+                scale=15.
                 self.net.criterion_cls = nn.CrossEntropyLoss()
             else:
+                scale=1.
                 idx = epoch // int(self.num_epochs / 2) 
                 betas = [0, 0.9999]
                 effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
@@ -65,7 +68,7 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
                                                   s=30, weight=per_cls_weights).cuda()
             
             # Training
-            self.train_epoch(epoch)
+            self.train_epoch(epoch, logit_scale=scale)
 
             # Validation
             self.logger.info('\nValidation.')
@@ -79,3 +82,53 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
         self.logger.info('\nBest Model Appears at Epoch {}...'.format(best_epoch))
         self.save_model()
 
+    def train_epoch(self, epoch, logit_scale=1):
+
+        self.net.train()
+
+        N = len(self.trainloader)
+
+        for batch_idx, (data, labels) in enumerate(self.trainloader):
+
+            # log basic adda train info
+            info_str = '[LDAM FT GT {} - Stage 2] Epoch: {} [{}/{} ({:.2f}%)] '.format(self.net.name, epoch, batch_idx,
+                                                                                       N, 100 * batch_idx / N)
+
+            ########################
+            # Setup data variables #
+            ########################
+            data, labels = data.cuda(), labels.cuda()
+            data.requires_grad = False
+            labels.requires_grad = False
+
+            ####################
+            # Forward and loss #
+            ####################
+            # forward
+            feats = self.net.feature(data)
+            logits = self.net.classifier(feats)
+            # calculate loss
+            loss = self.net.criterion_cls(logits * logit_scale, labels)
+
+            #############################
+            # Backward and optimization #
+            #############################
+            # zero gradients for optimizer
+            self.opt_net.zero_grad()
+            # loss backpropagation
+            loss.backward()
+            # optimize step
+            self.opt_net.step()
+
+            ###########
+            # Logging #
+            ###########
+            if batch_idx % self.log_interval == 0:
+                # compute overall acc
+                preds = logits.argmax(dim=1)
+                acc = (preds == labels).float().mean()
+                # log update info
+                info_str += 'Acc: {:0.1f} Xent: {:.3f}'.format(acc.item() * 100, loss.item())
+                self.logger.info(info_str)
+
+        self.scheduler.step()
