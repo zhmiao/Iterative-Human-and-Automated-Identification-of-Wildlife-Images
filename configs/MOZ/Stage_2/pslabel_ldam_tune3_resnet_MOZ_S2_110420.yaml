@@ -19,7 +19,8 @@ num_workers: 4
 # model
 model_name: PlainResNetClassifier
 num_layers: 50
-weights_init: ./weights/LDAMGTFineTuneStage2/110220_MOZ_S2_FT_GT_LDAM_0.pth 
+# weights_init: ./weights/LDAMGTFineTuneStage2/110220_MOZ_S2_FT_GT_LDAM_0.pth 
+weights_init: ./weights/LDAMGTFineTuneStage2/110220_MOZ_S2_FT_GT_LDAM_2.pth 
 
 # optim
 ## feature

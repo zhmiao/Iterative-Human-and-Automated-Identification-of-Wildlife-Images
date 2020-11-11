@@ -157,15 +157,15 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
             self.net.load_state_dict(copy.deepcopy(self.net.best_weights))
 
             # Get original pseudo labels
-            self.pseudo_labels_hard = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_1_init_pseudo_hard.npy',
-                                                  dtype=np.int)
+            # self.pseudo_labels_hard = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_1_init_pseudo_hard.npy',
+            #                                       dtype=np.int)
 
-            # Reseting pseudo labels with best model
-            self.pseudo_label_reset(self.trainloader_eval)
+            # # Reseting pseudo labels with best model
+            # self.pseudo_label_reset(self.trainloader_eval)
 
-            # Reseting train loaders with new pseudolabels 
-            self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard,
-                                   pseudo_soft=self.pseudo_labels_soft)
+            # # Reseting train loaders with new pseudolabels 
+            # self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard,
+            #                        pseudo_soft=self.pseudo_labels_soft)
 
             # Reseting optimizers
             self.set_optimizers(lr_factor=1.)
