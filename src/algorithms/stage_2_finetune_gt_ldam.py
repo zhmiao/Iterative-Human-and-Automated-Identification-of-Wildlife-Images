@@ -52,8 +52,8 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
 
         for epoch in range(self.num_epochs):
 
-            if epoch % 3 == 0 or epoch < 3:
-                scale=15.
+            if epoch < 3:
+                scale=30.
                 self.net.criterion_cls = nn.CrossEntropyLoss()
             else:
                 scale=1.
