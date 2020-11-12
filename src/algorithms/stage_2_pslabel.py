@@ -69,7 +69,7 @@ def load_val_data(args, conf_preds):
     return trainloader_eval, valloader, valloaderunknown, deployloader
 
 
-def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, cas=False):
+def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, cas=False, blur=False):
 
     print('Using class indices: {} \n'.format(class_indices[args.class_indices]))
 
@@ -87,12 +87,13 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
                                   conf_preds=conf_preds,
                                   pseudo_labels_hard=pseudo_labels_hard,
                                   pseudo_labels_soft=pseudo_labels_soft,
-                                  GTPS_mode='GT')
+                                  GTPS_mode='GT',
+                                  blur=blur)
 
     trainloader_ps = load_dataset(name=args.dataset_name,
                                   class_indices=cls_idx,
                                   dset='train',
-                                 transform=args.train_transform + '_Pseudolabeled',
+                                  transform=args.train_transform + '_Pseudolabeled',
                                   rootdir=args.dataset_root,
                                   batch_size=int(args.batch_size * 2 / 3),
                                   shuffle=True,
@@ -101,7 +102,8 @@ def load_train_data(args, conf_preds, pseudo_labels_hard, pseudo_labels_soft, ca
                                   conf_preds=conf_preds,
                                   pseudo_labels_hard=pseudo_labels_hard,
                                   pseudo_labels_soft=pseudo_labels_soft,
-                                  GTPS_mode='PS')
+                                  GTPS_mode='PS',
+                                  blur=blur)
 
     return trainloader_gt, trainloader_ps
 
@@ -144,12 +146,12 @@ class SemiStage2(PlainStage1):
         self.train_class_counts = self.trainloader_eval.dataset.class_counts
         self.train_annotation_counts = self.trainloader_eval.dataset.class_counts_ann
 
-    def reset_trainloader(self, pseudo_hard, pseudo_soft, cas=False):
+    def reset_trainloader(self, pseudo_hard, pseudo_soft, cas=False, blur=False):
         self.logger.info('\nReseting training loaders with pseudo labels.')
         self.logger.info('\nTRAINLOADER_NO_UP_GT....')
         (self.trainloader_gt,
          self.trainloader_ps) = load_train_data(self.args, self.conf_preds, 
-                                                pseudo_hard, pseudo_soft, cas=cas)
+                                                pseudo_hard, pseudo_soft, cas=cas, blur=blur)
 
     def set_train(self):
         # setup network

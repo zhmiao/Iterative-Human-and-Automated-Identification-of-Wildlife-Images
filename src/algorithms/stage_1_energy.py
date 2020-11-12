@@ -239,4 +239,3 @@ class EnergyStage1(PlainStage1):
                 total_logits.append(logits.detach().cpu().numpy())
 
         return total_preds, total_labels, total_logits
-

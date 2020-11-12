@@ -66,6 +66,44 @@ class Algorithm:
         pass
 
 
+class WarmupScheduler:
+    def __init__(self, optimizer, decay1, decay2, gamma, len_epoch, warmup_epochs=5, epi=1):
+        self.optimizer = optimizer
+        self.decay1 = decay1
+        self.decay2 = decay2
+        self.gamma = gamma
+        self.len_epoch = len_epoch
+        self.warmup_epochs = warmup_epochs
+        self.epi = epi
+        self.epoch = 1
+
+        self.init_lr_list = []
+        for param_group in self.optimizer.param_groups:
+            self.init_lr_list.append(deepcopy(param_group['lr']))
+
+    # def step(self, epoch, step):
+    def step(self):
+
+        """Sets the learning rate to the initial LR decayed by 10 every X epochs"""
+
+        for i, param_group in enumerate(self.optimizer.param_groups):
+
+            init_lr = self.init_lr_list[i]
+
+            if self.epoch < (self.warmup_epochs * self.epi):
+                lr = init_lr * self.epoch / self.warmup_epochs
+            elif self.epoch >= (self.decay2 * self.epi):
+                lr = init_lr * self.gamma * self.gamma
+            elif self.epoch >= (self.decay1 * self.epi):
+                lr = init_lr * self.gamma
+            else:
+                lr = init_lr
+
+            param_group['lr'] = lr
+
+        self.epoch += 1
+
+
 def acc(preds, labels):
 
     _, label_counts = np.unique(labels, return_counts=True)

@@ -15,7 +15,7 @@ from src.data.class_indices import class_indices
 from src.models.utils import get_model
 
 
-def load_data(args, conf_preds):
+def load_data(args, conf_preds, pseudo_labels):
 
     """
     Dataloading function. This function can change alg by alg as well.
@@ -29,85 +29,51 @@ def load_data(args, conf_preds):
                                      class_indices=cls_idx,
                                      dset='train',
                                      transform='eval',
-                                     split=None,
                                      rootdir=args.dataset_root,
                                      batch_size=args.batch_size,
                                      shuffle=False,
                                      num_workers=args.num_workers,
                                      cas_sampler=False,
                                      conf_preds=conf_preds,
-                                     pseudo_labels_hard=None,
+                                     pseudo_labels_hard=pseudo_labels,
                                      pseudo_labels_soft=None,
-                                     GTPS_mode=None)
-
-    trainloader_cent = load_dataset(name=args.dataset_name,
-                                    class_indices=cls_idx,
-                                    dset='train',
-                                    transform='eval',
-                                    split=args.train_split,
-                                    rootdir=args.dataset_root,
-                                    batch_size=args.batch_size,
-                                    shuffle=False,
-                                    num_workers=args.num_workers,
-                                    cas_sampler=False,
-                                    conf_preds=conf_preds,
-                                    pseudo_labels_hard=None,
-                                    pseudo_labels_soft=None,
-                                    GTPS_mode='GT_ONLY')
-
-    testloader = load_dataset(name=args.dataset_name,
-                              class_indices=cls_idx,
-                              dset='test',
-                              transform='eval',
-                              split=None,
-                              rootdir=args.dataset_root,
-                              batch_size=args.batch_size,
-                              shuffle=False,
-                              num_workers=args.num_workers,
-                              cas_sampler=False,
-                              conf_preds=None,
-                              GTPS_mode=None)
+                                     GTPS_mode='both')
 
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
                              dset='val',
                              transform='eval',
-                             split=None,
                              rootdir=args.dataset_root,
                              batch_size=args.batch_size,
                              shuffle=False,
                              num_workers=args.num_workers,
-                             cas_sampler=False,
-                             conf_preds=None,
-                             GTPS_mode=None)
+                             cas_sampler=False)
 
-    deployloader = load_dataset(name=args.deploy_dataset_name,
-                                class_indices=cls_idx,
-                                dset='deploy',
-                                transform='eval',
-                                split=None,
-                                rootdir=args.dataset_root,
-                                batch_size=args.batch_size,
-                                shuffle=False,
-                                num_workers=args.num_workers,
-                                cas_sampler=False)
-
-    deployloader_ood = load_dataset(name=args.deploy_ood_dataset_name,
+    valloaderunknown = load_dataset(name=args.unknown_dataset_name,
                                     class_indices=cls_idx,
-                                    dset='deploy',
+                                    dset='val',
                                     transform='eval',
-                                    split=None,
                                     rootdir=args.dataset_root,
                                     batch_size=args.batch_size,
                                     shuffle=False,
                                     num_workers=args.num_workers,
                                     cas_sampler=False)
 
-    return trainloader_no_up, trainloader_cent, testloader, valloader, deployloader, deployloader_ood
+    deployloader = load_dataset(name=args.deploy_dataset_name,
+                                class_indices=cls_idx,
+                                dset=None,
+                                transform='eval',
+                                rootdir=args.dataset_root,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=args.num_workers,
+                                cas_sampler=False)
+
+    return trainloader_no_up,  valloader, deployloader, valloaderunknown, deployloader
 
 
-@register_algorithm('OLTR_PS')
-class OLTR(PlainMemoryStage2_ConfPseu):
+@register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter_TUNE')
+class OLTR(Algorithm):
 
     """
     Overall training function.
@@ -127,25 +93,33 @@ class OLTR(PlainMemoryStage2_ConfPseu):
 
         # Training epochs and logging intervals
         self.log_interval = args.log_interval
-        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
 
-        self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('.pth', '_init_pseudo_hard.npy'), dtype=np.int)
+        self.conf_preds = list(np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_1_conf_preds.npy').astype(int))
+        self.pseudo_labels_hard = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_1_init_pseudo_hard.npy',
+                                              dtype=np.int)
+
+        # self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
+        # self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('.pth', '_init_pseudo_hard.npy'), dtype=np.int)
+
         self.pseudo_labels_soft = None
 
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader_no_up, self.trainloader_cent, self.testloader, self.valloader, \
-        self.deployloader, self.deployloader_ood = load_data(args, self.conf_preds)
+        (self.trainloader_no_up, self.valloader, self.valloaderunknown,
+         self.deployloader) = load_data(args, self.conf_preds, self.pseudo_labels_hard)
 
-        self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
-        self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
+        # self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
+        # self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
 
+        self.train_class_counts = self.trainloader_eval.dataset.class_counts
+        self.train_annotation_counts = self.trainloader_eval.dataset.class_counts_ann
+
+        # TODO: Continue!!!
         self.trainloader_up_gt = None
         self.trainloader_up_ps = None
         self.trainloader_no_up_gt = None
         self.trainloader_no_up_ps = None
-        self.trainloader_no_up_gtps = None
 
         if args.limit_steps:
             self.logger.info('** LIMITING STEPS!!! **')
@@ -285,23 +259,6 @@ class OLTR(PlainMemoryStage2_ConfPseu):
                                                  GTPS_mode='PS',
                                                  blur=True)
 
-        self.logger.info('\nTRAINLOADER_NO_UP_GTPS....')
-        self.trainloader_no_up_gtps = load_dataset(name=self.args.dataset_name,
-                                                   class_indices=cls_idx,
-                                                   dset='train',
-                                                   transform='eval',
-                                                   split=None,
-                                                   rootdir=self.args.dataset_root,
-                                                   batch_size=int(self.args.batch_size / 2),
-                                                   shuffle=True,  # Here
-                                                   num_workers=self.args.num_workers,
-                                                   cas_sampler=False,  # Here
-                                                   conf_preds=self.conf_preds,
-                                                   pseudo_labels_hard=self.pseudo_labels_hard,
-                                                   pseudo_labels_soft=self.pseudo_labels_soft,
-                                                   GTPS_mode='both',
-                                                   blur=False)
-
     def train_memory_epoch(self, epoch, soft=False):
 
         self.net.feature.train()
@@ -431,7 +388,7 @@ class OLTR(PlainMemoryStage2_ConfPseu):
 
             # Generate centroids!!
             self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
-            initial_centroids = self.centroids_cal(self.trainloader_no_up_gtps).clone().detach()
+            initial_centroids = self.centroids_cal(self.trainloader_no_up).clone().detach()
 
             # Intitialize centroids using named parameter to avoid possible bugs
             with torch.no_grad():

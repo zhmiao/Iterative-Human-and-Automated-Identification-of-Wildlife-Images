@@ -112,12 +112,14 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                     idx = 1 
                     self.logger.info('\nUSING DRW..')
                     self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_tail,
-                                           pseudo_soft=None)
+                                           pseudo_soft=None,
+                                           blur=False)
                 else:
                     idx = 0
                     self.logger.info('\nNO DRW..')
                     self.reset_trainloader(pseudo_hard=self.pseudo_labels_hard_head,
-                                           pseudo_soft=None)
+                                           pseudo_soft=None,
+                                           blur=False)
 
                 effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
                 per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
@@ -193,7 +195,7 @@ class LDAMSemiStage2_TUNE3(SemiStage2):
                 feats = self.net.feature(data)
                 logits = self.net.classifier(feats)
 
-                max_probs, preds = F.softmax(30 * logits, dim=1).max(dim=1)
+                max_probs, preds = F.softmax(14 * logits, dim=1).max(dim=1)
 
                 if ood:
                     # Set unconfident prediction to -1

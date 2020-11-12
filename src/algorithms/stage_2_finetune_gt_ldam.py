@@ -45,6 +45,16 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
 
         self.set_optimizers()
 
+    def set_eval(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.logger.info('\nLoading from {}'.format(self.weights_path))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False,
+                             norm=True)
+
     def train(self):
 
         best_epoch = 0
@@ -52,23 +62,40 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
 
         for epoch in range(self.num_epochs):
 
-            if epoch < 3:
-                scale = 30.
-                self.net.criterion_cls = nn.CrossEntropyLoss()
-            elif epoch % 3 == 0:
-                scale = 1.
-                idx = 0 
-                betas = [0, 0.9999]
-                effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
-                per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
-                per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
-                per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
+            # if epoch < 3:
+            #     scale = 30.
+            #     self.net.criterion_cls = nn.CrossEntropyLoss()
+            # elif epoch % 3 == 0:
+            #     scale = 1.
+            #     idx = 0 
+            #     betas = [0, 0.9999]
+            #     effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
+            #     per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
+            #     per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
+            #     per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
 
-                self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.3, 
-                                                  s=30, weight=per_cls_weights).cuda()
+            #     self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.7, 
+            #                                       s=30, weight=per_cls_weights).cuda()
+            # else:
+            #     scale = 1.
+            #     idx = epoch // int(self.num_epochs * 2 / 3) 
+            #     # idx = epoch // int(self.num_epochs / 3) 
+            #     betas = [0, 0.9999]
+            #     effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
+            #     per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
+            #     per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(self.train_annotation_counts)
+            #     per_cls_weights = torch.FloatTensor(per_cls_weights).cuda()
+
+            #     self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.7, 
+            #                                       s=30, weight=per_cls_weights).cuda()
+            
+            if epoch < 3 or epoch % 3 == 0:
+                scale = 1.
+                self.net.criterion_cls = nn.CrossEntropyLoss()
             else:
                 scale = 1.
                 idx = epoch // int(self.num_epochs / 2) 
+                # idx = epoch // int(self.num_epochs / 3) 
                 betas = [0, 0.9999]
                 effective_num = 1.0 - np.power(betas[idx], self.train_annotation_counts)
                 per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
@@ -77,7 +104,6 @@ class LDAMGTFineTuneStage2(GTFineTuneStage2):
 
                 self.net.criterion_cls = LDAMLoss(cls_num_list=self.train_annotation_counts, max_m=0.3, 
                                                   s=30, weight=per_cls_weights).cuda()
-            
             # Training
             self.train_epoch(epoch, logit_scale=scale)
 

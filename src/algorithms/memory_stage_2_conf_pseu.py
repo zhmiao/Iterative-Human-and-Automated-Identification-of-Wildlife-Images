@@ -28,87 +28,61 @@ def load_data(args, conf_preds, unconf_only=False, pseudo_labels=None):
                                      class_indices=cls_idx,
                                      dset='train',
                                      transform='eval',
-                                     split=args.train_split,
                                      rootdir=args.dataset_root,
                                      batch_size=args.batch_size,
                                      shuffle=False,
                                      num_workers=args.num_workers,
                                      cas_sampler=False,
                                      conf_preds=conf_preds,
-                                     pseudo_labels=None,
-                                     unconf_only=True)
-                                     # conf_preds=conf_preds,
-                                     # pseudo_labels=pseudo_labels,
-                                     # unconf_only=unconf_only)
-
-    # trainloader_up = load_dataset(name=args.dataset_name,
-    #                               class_indices=cls_idx,
-    #                               dset='train',
-    #                               transform='train',
-    #                               split=args.train_split,
-    #                               rootdir=args.dataset_root,
-    #                               batch_size=args.batch_size,
-    #                               shuffle=False,
-    #                               num_workers=args.num_workers,
-    #                               cas_sampler=True,
-    #                               conf_preds=conf_preds,
-    #                               pseudo_labels=pseudo_labels,
-    #                               unconf_only=unconf_only)
+                                     pseudo_labels_hard=None,
+                                     pseudo_labels_soft=None,
+                                     GTPS_mode=None)
 
     trainloader_up = load_dataset(name=args.dataset_name,
                                   class_indices=cls_idx,
                                   dset='train',
                                   transform='train',
-                                  split=args.train_split,
                                   rootdir=args.dataset_root,
                                   batch_size=args.batch_size,
-                                  shuffle=True,
+                                  shuffle=False,
                                   num_workers=args.num_workers,
                                   cas_sampler=False,
                                   conf_preds=conf_preds,
-                                  pseudo_labels=None,
-                                  unconf_only=True)
-
-    testloader = load_dataset(name=args.dataset_name,
-                              class_indices=cls_idx,
-                              dset='test',
-                              transform='eval',
-                              split=None,
-                              rootdir=args.dataset_root,
-                              batch_size=args.batch_size,
-                              shuffle=False,
-                              num_workers=args.num_workers,
-                              cas_sampler=False,
-                              conf_preds=None,
-                              pseudo_labels=None,
-                              unconf_only=False)
+                                  pseudo_labels_hard=None,
+                                  pseudo_labels_soft=None,
+                                  GTPS_mode='GT')
 
     valloader = load_dataset(name=args.dataset_name,
                              class_indices=cls_idx,
                              dset='val',
                              transform='eval',
-                             split=None,
                              rootdir=args.dataset_root,
                              batch_size=args.batch_size,
                              shuffle=False,
                              num_workers=args.num_workers,
-                             cas_sampler=False,
-                             conf_preds=None,
-                             pseudo_labels=None,
-                             unconf_only=False)
+                             cas_sampler=False)
+
+    valloaderunknown = load_dataset(name=args.unknown_dataset_name,
+                                    class_indices=cls_idx,
+                                    dset='val',
+                                    transform='eval',
+                                    rootdir=args.dataset_root,
+                                    batch_size=args.batch_size,
+                                    shuffle=False,
+                                    num_workers=args.num_workers,
+                                    cas_sampler=False)
 
     deployloader = load_dataset(name=args.deploy_dataset_name,
                                 class_indices=cls_idx,
-                                dset='test',
+                                dset=None,
                                 transform='eval',
-                                split=None,
                                 rootdir=args.dataset_root,
                                 batch_size=args.batch_size,
                                 shuffle=False,
                                 num_workers=args.num_workers,
                                 cas_sampler=False)
 
-    return trainloader_no_up, trainloader_up, testloader, valloader, deployloader
+    return trainloader_no_up, trainloader_up, valloader, valloaderunknown, deployloader
 
 
 @register_algorithm('MemoryStage2_ConfPseu')
@@ -131,17 +105,15 @@ class MemoryStage2_ConfPseu(Algorithm):
         # Training epochs and logging intervals
         self.num_epochs = args.num_epochs
         self.log_interval = args.log_interval
-        self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
-        self.stage_1_mem_flat = np.fromfile(args.weights_init.replace('.pth', '_centroids.npy'), dtype=np.float32)
-        # self.pseudo_labels = None
-        self.pseudo_labels = list(np.fromfile(args.weights_init.replace('.pth', '_init_pseudo.npy'), dtype=np.int))
+        self.conf_preds = list(np.fromfile(args.weights_init.replace('_ft.pth', '_conf_preds.npy')).astype(int))
+        self.pseudo_labels = list(np.fromfile(args.weights_init.replace('_ft.pth', '_init_pseudo_hard.npy'), dtype=np.int))
 
         #######################################
         # Setup data for training and testing #
         #######################################
-        self.trainloader_no_up, self.trainloader_up, self.testloader, \
+        self.trainloader_no_up, self.trainloader_up, \
         self.valloader, self.deployloader = load_data(args, self.conf_preds, unconf_only=False,
-                                                      pseudo_labels=self.pseudo_labels)
+                                                      pseudo_labels=None)
 
         self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
         self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
