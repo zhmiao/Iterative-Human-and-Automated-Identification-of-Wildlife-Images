@@ -14,6 +14,7 @@ from . import stage_2_pslabel_ldam_tune
 from . import stage_2_pslabel_ldam_tune2
 from . import stage_2_pslabel_ldam_tune3
 from . import gtps_memory_stage_2_conf_pseu
+from . import gtps_memory_stage_2_conf_pseu_soft_iter_tune
 # from . import plain_stage_2
 # from . import memory_stage_2
 # from . import memory_stage_2_conf_pseu

@@ -100,10 +100,24 @@ class SoftOLTRResNetClassifier(BaseModule):
             init_weights = torch.load(init_path)
 
         if feat_only:
-            init_weights = OrderedDict({k.replace('feature.', ''): init_weights[k] for k in init_weights})
-            self.feature.load_state_dict(init_weights, strict=False)
-            load_keys = set(init_weights.keys())
-            self_keys = set(self.feature.state_dict().keys())
+            # init_weights = OrderedDict({k.replace('feature.', ''): init_weights[k] for k in init_weights})
+            # self.feature.load_state_dict(init_weights, strict=False)
+            # load_keys = set(init_weights.keys())
+            # self_keys = set(self.feature.state_dict().keys())
+
+            init_weights_feat = OrderedDict({k.replace('feature.', ''): init_weights[k] for k in init_weights})
+            self.feature.load_state_dict(init_weights_feat, strict=False)
+            load_keys_feat = set(init_weights_feat.keys())
+            self_keys_feat = set(self.feature.state_dict().keys())
+
+            init_weights_clf = OrderedDict({k.replace('classifier.', ''): init_weights[k] for k in init_weights})
+            self.fc_hallucinator.load_state_dict(init_weights_clf, strict=False)
+            load_keys_hall = set(init_weights_clf.keys())
+            self_keys_hall = set(self.fc_hallucinator.state_dict().keys())
+
+            load_keys = load_keys_feat.union(load_keys_hall)
+            self_keys = self_keys_feat.intersection(self_keys_hall)
+
         else:
             self.load_state_dict(init_weights, strict=False)
             load_keys = set(init_weights.keys())

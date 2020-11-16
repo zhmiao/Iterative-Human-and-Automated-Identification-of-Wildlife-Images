@@ -8,8 +8,8 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from .utils import register_algorithm, Algorithm, stage_2_metric, acc, WarmupScheduler
-from .plain_memory_stage_2_conf_pseu import PlainMemoryStage2_ConfPseu
+from .utils import register_algorithm, Algorithm, acc, WarmupScheduler, ood_metric
+# from .plain_memory_stage_2_conf_pseu import PlainMemoryStage2_ConfPseu
 from src.data.utils import load_dataset
 from src.data.class_indices import class_indices
 from src.models.utils import get_model
@@ -69,7 +69,7 @@ def load_data(args, conf_preds, pseudo_labels):
                                 num_workers=args.num_workers,
                                 cas_sampler=False)
 
-    return trainloader_no_up,  valloader, deployloader, valloaderunknown, deployloader
+    return trainloader_no_up,  valloader, valloaderunknown, deployloader
 
 
 @register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter_TUNE')
@@ -98,24 +98,17 @@ class OLTR(Algorithm):
         self.pseudo_labels_hard = np.fromfile('./weights/EnergyStage1/101920_MOZ_S1_1_init_pseudo_hard.npy',
                                               dtype=np.int)
 
-        # self.conf_preds = list(np.fromfile(args.weights_init.replace('.pth', '_conf_preds.npy')).astype(int))
-        # self.pseudo_labels_hard = np.fromfile(args.weights_init.replace('.pth', '_init_pseudo_hard.npy'), dtype=np.int)
-
         self.pseudo_labels_soft = None
 
         #######################################
         # Setup data for training and testing #
         #######################################
-        (self.trainloader_no_up, self.valloader, self.valloaderunknown,
+        (self.trainloader_eval, self.valloader, self.valloaderunknown,
          self.deployloader) = load_data(args, self.conf_preds, self.pseudo_labels_hard)
-
-        # self.train_unique_labels, self.train_class_counts = self.trainloader_no_up.dataset.class_counts_cal()
-        # self.train_annotation_counts = self.trainloader_no_up.dataset.class_counts_cal_ann()
 
         self.train_class_counts = self.trainloader_eval.dataset.class_counts
         self.train_annotation_counts = self.trainloader_eval.dataset.class_counts_ann
 
-        # TODO: Continue!!!
         self.trainloader_up_gt = None
         self.trainloader_up_ps = None
         self.trainloader_no_up_gt = None
@@ -123,7 +116,7 @@ class OLTR(Algorithm):
 
         if args.limit_steps:
             self.logger.info('** LIMITING STEPS!!! **')
-            self.max_batch = len(self.trainloader_no_up)
+            self.max_batch = len(self.trainloader_eval)
         else:
             self.max_batch = None
 
@@ -134,15 +127,24 @@ class OLTR(Algorithm):
         # setup network
         # The only thing different from plain resnet is that init_feat_only is set to true now
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
-        # TODO: LOADING WARM HERE
-        # self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-        #                      weights_init=self.args.weights_init, num_layers=self.args.num_layers,
-        #                      init_feat_only=False, T=self.args.T, alpha=self.args.alpha)
+
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.args.weights_init.replace('.pth', '_hall_warm.pth'), num_layers=self.args.num_layers,
-                             init_feat_only=False, T=self.args.T, alpha=self.args.alpha)
+                             weights_init=self.args.weights_init, num_layers=self.args.num_layers,
+                             init_feat_only=True, T=self.args.T, alpha=self.args.alpha)
+
+        _ = self.evaluate(self.valloader, hall=True)
 
         self.set_optimizers()
+
+    def set_eval(self):
+        ###############################
+        # Load weights for evaluation #
+        ###############################
+        self.logger.info('\nGetting {} model.'.format(self.args.model_name))
+        self.logger.info('\nLoading from {}'.format(self.weights_path))
+        self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+                             weights_init=self.weights_path, num_layers=self.args.num_layers, init_feat_only=False)
 
     def set_optimizers(self):
         self.logger.info('** SETTING OPTIMIZERS!!! **')
@@ -196,7 +198,6 @@ class OLTR(Algorithm):
                                               class_indices=cls_idx,
                                               dset='train',
                                               transform='train_strong',
-                                              split=None,
                                               rootdir=self.args.dataset_root,
                                               batch_size=int(self.args.batch_size / 2),
                                               shuffle=False,  # Here
@@ -213,7 +214,6 @@ class OLTR(Algorithm):
                                               class_indices=cls_idx,
                                               dset='train',
                                               transform='train_strong',
-                                              split=None,
                                               rootdir=self.args.dataset_root,
                                               batch_size=int(self.args.batch_size / 2),
                                               shuffle=False,  # Here
@@ -230,7 +230,6 @@ class OLTR(Algorithm):
                                                  class_indices=cls_idx,
                                                  dset='train',
                                                  transform='train_strong',
-                                                 split=None,
                                                  rootdir=self.args.dataset_root,
                                                  batch_size=int(self.args.batch_size / 2),
                                                  shuffle=True,  # Here
@@ -247,7 +246,6 @@ class OLTR(Algorithm):
                                                  class_indices=cls_idx,
                                                  dset='train',
                                                  transform='train_strong',
-                                                 split=None,
                                                  rootdir=self.args.dataset_root,
                                                  batch_size=int(self.args.batch_size / 2),
                                                  shuffle=True,  # Here
@@ -259,7 +257,99 @@ class OLTR(Algorithm):
                                                  GTPS_mode='PS',
                                                  blur=True)
 
-    def train_memory_epoch(self, epoch, soft=False):
+    def pseudo_label_reset(self, loader, hall=False, hard=False, soft=False):
+        self.net.eval()
+        total_preds, total_labels, total_logits, conf_preds = self.evaluate_forward(loader, hall=hall, 
+                                                                                    ood=False, out_conf=True)
+        total_preds = np.concatenate(total_preds, axis=0)
+        total_labels = np.concatenate(total_labels, axis=0)
+        total_logits = np.concatenate(total_logits, axis=0)
+
+        if hard:
+            self.logger.info("** Reseting hard pseudo labels **\n")
+            self.pseudo_labels_hard[conf_preds == 1] = total_preds[conf_preds == 1]
+        
+        if soft:
+            self.logger.info("** Reseting soft pseudo labels **\n")
+            if self.pseudo_labels_soft is not None:
+                self.pseudo_labels_soft[conf_preds == 1] = total_logits[conf_preds == 1]
+            else:
+                self.pseudo_labels_soft = total_logits
+
+    def train(self):
+
+        best_semi_iter = 0
+        best_epoch = 0
+        best_acc_mac = 0.
+        best_acc_mic = 0.
+
+        self.pseudo_label_reset(self.trainloader_eval, hall=True, soft=True, hard=True)
+
+        for semi_i in range(self.args.semi_iters):
+
+            # Setting new train loader with CAS
+            self.reset_trainloader()
+
+            # Generate centroids!!
+            self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
+            initial_centroids = self.centroids_cal(self.trainloader_eval).clone().detach()
+
+            # Intitialize centroids using named parameter to avoid possible bugs
+            with torch.no_grad():
+                for name, param in self.net.criterion_ctr.named_parameters():
+                    if name == 'centroids':
+                        self.logger.info('\nPopulating initial centroids.\n')
+                        param.copy_(initial_centroids)
+
+            for epoch in range(self.args.oltr_epochs):
+
+                self.train_epoch(epoch, soft=(semi_i != 0))
+
+                # Validation
+                self.logger.info('\nValidation, semi-iteration {}.'.format(semi_i))
+                val_acc_mac, val_acc_mic = self.evaluate(self.valloader)
+                if val_acc_mac > best_acc_mac:
+                    self.logger.info('\nUpdating Best Model Weights!!')
+                    self.net.update_best()
+                    best_acc_mac = val_acc_mac
+                    best_acc_mic = val_acc_mic
+                    best_epoch = epoch
+                    best_semi_iter = semi_i
+                self.logger.info('\nCurrrent Best Mac Acc is {:.3f} (Mic: {:.3f}) at epoch {} semi-iter {}...'
+                                 .format(best_acc_mac * 100, best_acc_mic * 100, best_epoch, best_semi_iter))
+
+            # Revert to best weights
+            self.net.load_state_dict(copy.deepcopy(self.net.best_weights))
+
+            # Reset pseudo labels
+            self.pseudo_label_reset(self.trainloader_eval, hall=False, soft=True, hard=True)
+
+            self.set_optimizers()
+
+            self.logger.info('\nBest Model Appears at Epoch {} Semi-iteration {} with Mac Acc {:.3f} (Mic {:.3f})...'
+                             .format(best_epoch, best_semi_iter, best_acc_mac * 100, best_acc_mic * 100))
+
+            self.save_model()
+
+    def evaluate(self, loader, hall=False, ood=False):
+        if ood:
+            eval_info, f1, _ = self.ood_evaluate_epoch(loader, self.valloaderunknown, hall=hall)
+            self.logger.info(eval_info)
+            return f1
+        else:
+            eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader, hall=hall)
+            self.logger.info(eval_info)
+            return eval_acc_mac, eval_acc_mic
+
+    def deploy(self, loader):
+        eval_info, f1, conf_preds = self.deploy_epoch(loader)
+        self.logger.info(eval_info)
+        conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
+        self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
+        conf_preds.tofile(conf_preds_path)
+        return f1
+
+    def train_epoch(self, epoch, soft=False):
 
         self.net.feature.train()
         self.net.fc_hallucinator.train()
@@ -299,12 +389,12 @@ class OLTR(Algorithm):
                                                               N, 100 * batch_idx / N)
 
             try:
-                data_gt, labels_gt, soft_target_gt, _, _ = next(iter_gt)
+                data_gt, labels_gt, soft_target_gt = next(iter_gt)
             except StopIteration:
                 iter_gt = iter(loader_gt)
-                data_gt, labels_gt, soft_target_gt, _, _ = next(iter_gt)
+                data_gt, labels_gt, soft_target_gt = next(iter_gt)
 
-            data_ps, labels_ps, soft_target_ps, _, _ = next(iter_ps)
+            data_ps, labels_ps, soft_target_ps = next(iter_ps)
 
             data = torch.cat((data_gt, data_ps), dim=0)
             labels = torch.cat((labels_gt, labels_ps), dim=0)
@@ -369,86 +459,111 @@ class OLTR(Algorithm):
         self.sch_cos_clf.step()
         self.sch_mem.step()
 
-    def train(self):
-
-        best_semi_iter = 0
-        best_epoch = 0
-        best_acc = 0.
-
-        self.logger.info('\nValidating initial model and reset pseudo labels.\n')
-        _ = self.evaluate(self.valloader, hall=True, soft_reset=False, hard_reset=False)
-        _ = self.evaluate(self.trainloader_no_up, hall=True, soft_reset=True, hard_reset=True)
-        # _ = self.evaluate(self.valloader, hall=False, soft_reset=False, hard_reset=False)
-        # _ = self.evaluate(self.trainloader_no_up, hall=False, soft_reset=True, hard_reset=True)
-
-        for semi_i in range(self.args.semi_iters):
-
-            # Setting new train loader with CAS
-            self.reset_trainloader()
-
-            # Generate centroids!!
-            self.logger.info('\nCalculating initial centroids for all stage 2 classes.')
-            initial_centroids = self.centroids_cal(self.trainloader_no_up).clone().detach()
-
-            # Intitialize centroids using named parameter to avoid possible bugs
-            with torch.no_grad():
-                for name, param in self.net.criterion_ctr.named_parameters():
-                    if name == 'centroids':
-                        self.logger.info('\nPopulating initial centroids.\n')
-                        param.copy_(initial_centroids)
-
-            for epoch in range(self.args.oltr_epochs):
-
-                self.train_memory_epoch(epoch, soft=(semi_i != 0))
-
-                # Validation
-                self.logger.info('\nValidation, semi-iteration {}.'.format(semi_i))
-                val_acc_mac = self.evaluate(self.valloader)
-                if val_acc_mac > best_acc:
-                    self.logger.info('\nUpdating Best Model Weights!!')
-                    self.net.update_best()
-                    best_acc = val_acc_mac
-                    best_epoch = epoch
-                    best_semi_iter = semi_i
-                self.logger.info('\nCurrrent Best Acc is {:.3f} at epoch {} semi-iter {}...'
-                                 .format(best_acc * 100, best_epoch, best_semi_iter))
-
-            # Revert to best weights
-            self.net.load_state_dict(copy.deepcopy(self.net.best_weights))
-
-            # Reset pseudo labels
-            _ = self.evaluate(self.trainloader_no_up, hall=False, soft_reset=True, hard_reset=True)
-
-            self.set_optimizers()
-
-            self.logger.info('\nBest Model Appears at Epoch {} Semi-iteration {} with Acc {:.3f}...'
-                             .format(best_epoch, best_semi_iter, best_acc * 100))
-
-            self.save_model()
-
-    def evaluate_epoch(self, loader, hall=False, soft_reset=False, hard_reset=False):
-
+    def evaluate_epoch(self, loader, hall=False):
         self.net.eval()
-
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
+        total_preds, total_labels, _ = self.evaluate_forward(loader, hall=hall, 
+                                                             ood=False, out_conf=False)
+        total_preds = np.concatenate(total_preds, axis=0)
+        total_labels = np.concatenate(total_labels, axis=0)
+        eval_info, mac_acc, mic_acc = self.evaluate_metric(total_preds, total_labels, 
+                                                           eval_class_counts, ood=False)
+        return eval_info, mac_acc, mic_acc
 
-        total_logits = []
+    def ood_evaluate_epoch(self, loader_in, loader_out, hall=False):
+        self.net.eval()
+        # Get unique classes in the loader and corresponding counts
+        loader_uni_class_in, eval_class_counts_in = loader_in.dataset.class_counts_cal()
+        loader_uni_class_out, eval_class_counts_out = loader_out.dataset.class_counts_cal()
+
+        self.logger.info("Forward through in test loader\n")
+        total_preds_in, total_labels_in, _ = self.evaluate_forward(loader_in, hall=hall,
+                                                                   ood=True, out_conf=False)
+        total_preds_in = np.concatenate(total_preds_in, axis=0)
+        total_labels_in = np.concatenate(total_labels_in, axis=0)
+
+        self.logger.info("Forward through out test loader\n")
+        total_preds_out, total_labels_out, _ = self.evaluate_forward(loader_out, hall=hall,
+                                                                     ood=True, out_conf=False)
+        total_preds_out = np.concatenate(total_preds_out, axis=0)
+        total_labels_out = np.concatenate(total_labels_out, axis=0)
+
+        total_preds = np.concatenate((total_preds_out, total_preds_in), axis=0)
+        total_labels = np.concatenate((total_labels_out, total_labels_in), axis=0)
+        loader_uni_class = np.concatenate((loader_uni_class_out, loader_uni_class_in), axis=0)
+        eval_class_counts = np.concatenate((eval_class_counts_out, eval_class_counts_in), axis=0)
+
+        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, 
+                                                         eval_class_counts, ood=True)
+
+        return eval_info, f1, conf_preds
+
+    def deploy_epoch(self, loader):
+        self.net.eval()
+        # Get unique classes in the loader and corresponding counts
+        loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
+        total_preds, total_labels, _ = self.evaluate_forward(loader, hall=False,
+                                                             ood=True, out_conf=False)
+        total_preds = np.concatenate(total_preds, axis=0)
+        total_labels = np.concatenate(total_labels, axis=0)
+        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, 
+                                                         eval_class_counts, ood=True)
+        return eval_info, f1, conf_preds
+
+    def memory_forward(self, data):
+        # feature
+        feats = self.net.feature(data)
+
+        batch_size = feats.size(0)
+        feat_size = feats.size(1)
+
+        # get current centroids and detach it from graph
+        centroids = self.net.criterion_ctr.centroids.clone().detach()
+        centroids.requires_grad = False
+
+        # set up visual memory
+        feats_expand = feats.clone().unsqueeze(1).expand(-1, self.net.num_cls, -1)
+        centroids_expand = centroids.clone().unsqueeze(0).expand(batch_size, -1, -1)
+        keys_memory = centroids.clone()
+
+        # computing reachability
+        dist_cur = torch.norm(feats_expand - centroids_expand, 2, 2)
+        values_nn, labels_nn = torch.sort(dist_cur, 1)
+
+        reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, feat_size)
+
+        # computing memory feature by querying and associating visual memory
+        values_memory = self.net.fc_hallucinator(feats.clone())
+        values_memory = values_memory.softmax(dim=1)
+        memory_feature = torch.matmul(values_memory, keys_memory)
+
+        # computing concept selector
+        concept_selector = self.net.fc_selector(feats.clone())
+        concept_selector = concept_selector.tanh()
+
+        # computing meta embedding
+        meta_feats = reachability * (feats + concept_selector * memory_feature)
+
+        # final logits
+        logits = self.net.cosnorm_classifier(meta_feats)
+
+        return feats, logits, values_nn
+
+    def evaluate_forward(self, loader, hall=False, ood=False, out_conf=False):
+
+        if hall: 
+            self.logger.info("\n** Using hallucinator for evaluation **\n")
+        
         total_preds = []
-        total_max_probs = []
         total_labels = []
+        total_logits = []
+        total_probs = []
 
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
 
-            for batch in tqdm(loader, total=len(loader)):
-
-                if loader == self.trainloader_no_up:
-                    data, labels, _, _ = batch
-                else:
-                    data, labels = batch
-
-            # for data, labels in tqdm(loader, total=len(loader)):
+            for data, labels in tqdm(loader, total=len(loader)):
 
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
@@ -460,9 +575,8 @@ class OLTR(Algorithm):
                     feats = self.net.feature(data)
                     logits = self.net.fc_hallucinator(feats)
                 else:
-
                     # forward
-                    _, logits, values_nn, meta_feats = self.memory_forward(data)
+                    feats, logits, values_nn = self.memory_forward(data)
 
                     # feats_expand = meta_feats.clone().unsqueeze(1).expand(-1, len(self.meta_centroids), -1)
                     #
@@ -493,80 +607,69 @@ class OLTR(Algorithm):
                     #                            .unsqueeze(1).expand(-1, logits.shape[1]))
                     #     logits = reachability_logits * logits
 
-                # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 
-                total_logits.append(logits.detach().cpu().numpy())
+                if ood:
+                    # Set unconfident prediction to -1
+                    preds[max_probs < self.args.theta] = -1
+
                 total_preds.append(preds.detach().cpu().numpy())
-                total_max_probs.append(max_probs.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
+                total_logits.append(logits.detach().cpu().numpy())
+                total_probs.append(max_probs.detach().cpu().numpy())
 
-        class_wrong_percent_unconfident, \
-        class_correct_percent_unconfident, \
-        class_acc_confident, total_unconf, \
-        missing_cls_in_test, \
-        missing_cls_in_train = stage_2_metric(np.concatenate(total_preds, axis=0),
-                                              np.concatenate(total_max_probs, axis=0),
-                                              np.concatenate(total_labels, axis=0),
-                                              self.train_unique_labels,
-                                              self.args.theta)
+        if out_conf:
+            total_probs = np.concatenate(total_probs, axis=0)
+            conf_preds = np.zeros(len(total_probs))
+            conf_preds[total_probs >= self.args.theta] = 1
+            return total_preds, total_labels, total_logits, conf_preds
+        else:
+            return total_preds, total_labels, total_logits
 
-        # Record per class accuracies
-        class_acc, mac_acc, mic_acc = acc(np.concatenate(total_preds, axis=0),
-                                          np.concatenate(total_labels, axis=0),
-                                          self.train_class_counts)
+    def evaluate_metric(self, total_preds, total_labels, eval_class_counts, ood=False):
+        if ood:
+            f1,\
+            class_acc_confident, class_percent_confident, false_pos_percent,\
+            class_wrong_percent_unconfident,\
+            percent_unknown, total_unknown, total_known, conf_preds = ood_metric(total_preds,
+                                                                                 total_labels,
+                                                                                 eval_class_counts)
 
-        eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+            eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
-        for i in range(len(self.train_unique_labels)):
-            if i not in missing_cls_in_test:
-                eval_info += 'Class {} (train counts {} / '.format(i, self.train_class_counts[i])
-                eval_info += 'ann counts {}): '.format(self.train_annotation_counts[i])
-                eval_info += 'Acc {:.3f} '.format(class_acc[i] * 100)
-                eval_info += 'Unconfident wrong % {:.3f} '.format(class_wrong_percent_unconfident[i] * 100)
-                eval_info += 'Unconfident correct % {:.3f} '.format(class_correct_percent_unconfident[i] * 100)
-                eval_info += 'Confident Acc {:.3f} \n'.format(class_acc_confident[i] * 100)
+            for i in range(len(class_acc_confident)):
+                eval_info += 'Class {} (tr {} / '.format(i, self.train_class_counts[i])
+                eval_info += 'ann {}): '.format(self.train_annotation_counts[i])
+                eval_info += 'Conf %: {:.2f}; '.format(class_percent_confident[i] * 100)
+                eval_info += 'Unconf wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
+                eval_info += 'Conf Acc: {:.3f}; \n'.format(class_acc_confident[i] * 100)
 
-        eval_info += 'Total unconfident samples: {}\n'.format(total_unconf)
-        eval_info += 'Missing classes in test: {}\n'.format(missing_cls_in_test)
+            eval_info += 'Overall F1: {:.3f}; \n'.format(f1)
+            eval_info += 'False positive %: {:.3f}; \n'.format(false_pos_percent * 100)
+            eval_info += 'Selected unknown %: {:.3f} ({}/{}); \n'.format(percent_unknown * 100,
+                                                                        int(percent_unknown * total_unknown),
+                                                                        total_unknown)
 
-        eval_info += 'Macro Acc: {:.3f}; '.format(mac_acc * 100)
-        eval_info += 'Micro Acc: {:.3f}; '.format(mic_acc * 100)
-        eval_info += 'Avg Unconf Wrong %: {:.3f}; '.format(class_wrong_percent_unconfident.mean() * 100)
-        eval_info += 'Avg Unconf Correct %: {:.3f}; '.format(class_correct_percent_unconfident.mean() * 100)
-        eval_info += 'Conf cc %: {:.3f}\n'.format(class_acc_confident.mean() * 100)
+            eval_info += 'Avg conf %: {:.3f} ({}/{}); \n'.format(class_percent_confident.mean() * 100,
+                                                                 int(class_percent_confident.mean() * total_known),
+                                                                 total_known)
+            eval_info += 'Avg unconf wrong %: {:.3f}; \n'.format(class_wrong_percent_unconfident.mean() * 100)
+            eval_info += 'Conf acc %: {:.3f}; \n'.format(class_acc_confident.mean() * 100)
 
-        # Record missing classes in evaluation sets if exist
-        missing_classes = list(set(loader.dataset.class_indices.values()) - set(loader_uni_class))
-        eval_info += 'Missing classes in evaluation set: '
-        for c in missing_classes:
-            eval_info += 'Class {} (train counts {})'.format(c, self.train_class_counts[c])
+            return eval_info, f1, conf_preds
+        else:
+            class_acc, mac_acc, mic_acc = acc(total_preds, total_labels)
 
-        total_max_probs = np.concatenate(total_max_probs, axis=0)
-        conf_preds = np.zeros(len(total_max_probs))
-        conf_preds[total_max_probs > self.args.theta] = 1
+            eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+            for i in range(len(class_acc)):
+                eval_info += 'Class {} (tr {} / '.format(i, self.train_class_counts[i])
+                eval_info += 'ann {}): '.format(self.train_annotation_counts[i])
+                eval_info += 'Acc {:.3f} \n'.format(class_acc[i] * 100)
 
-        if soft_reset:
-            self.logger.info("** Reseting soft pseudo labels **\n")
-            if self.pseudo_labels_soft is not None:
-                self.pseudo_labels_soft[conf_preds == 1] = np.concatenate(total_logits, axis=0)[conf_preds == 1]
-            else:
-                self.pseudo_labels_soft = np.concatenate(total_logits, axis=0)
-        if hard_reset:
-            self.logger.info("** Reseting hard pseudo labels **\n")
-            self.pseudo_labels_hard[conf_preds == 1] = np.concatenate(total_preds, axis=0)[conf_preds == 1]
+            eval_info += 'Macro Acc: {:.3f}; Micro Acc: {:.3f}\n'.format(mac_acc * 100, mic_acc * 100)
+            return eval_info, mac_acc, mic_acc
 
-
-        return eval_info, class_acc.mean()
-
-    def evaluate(self, loader, hall=False, soft_reset=False, hard_reset=False):
-        # self.logger.info('Calculating GT meta centroids.\n')
-        # self.meta_centroids = self.centroids_cal(self.trainloader_cent)
-        eval_info, eval_acc_mac = self.evaluate_epoch(loader, hall=hall, soft_reset=soft_reset, hard_reset=hard_reset)
-        self.logger.info(eval_info)
-        return eval_acc_mac
-
-    def centroids_cal(self, loader, meta=False):
+    def centroids_cal(self, loader):
 
         self.net.eval()
 
@@ -577,22 +680,13 @@ class OLTR(Algorithm):
 
             for batch in tqdm(loader, total=len(loader)):
 
-                if loader == self.trainloader_no_up_gtps:
-                    data, labels, _, _, _ = batch
-                elif loader == self.trainloader_cent:
-                    data, labels, _, _ = batch
-                else:
-                    data, labels = batch
-
+                data, labels = batch
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
                 data.requires_grad = False
                 labels.requires_grad = False
                 # forward
-                if meta:
-                    _, _, _, feats = self.memory_forward(data, self_cent=True)
-                else:
-                    feats = self.net.feature(data)
+                feats = self.net.feature(data)
                 # Add all calculated features to center tensor
                 for i in range(len(labels)):
                     label = labels[i]
@@ -605,115 +699,7 @@ class OLTR(Algorithm):
 
         return centroids
 
-    def deploy_epoch(self, loader):
-
-        self.net.eval()
-
-        total_file_id = []
-        total_preds = []
-        total_max_probs = []
-
-        # Forward and record # correct predictions of each class
-        with torch.set_grad_enabled(False):
-
-            for data, file_id in tqdm(loader, total=len(loader)):
-
-                # setup data
-                data = data.cuda()
-                data.requires_grad = False
-
-                # forward
-                _, logits, values_nn = self.memory_forward(data)
-
-                # scale logits with reachability
-                # reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
-                #                        .unsqueeze(1).expand(-1, logits.shape[1]))
-                # logits = reachability_logits * logits
-
-                # compute correct
-                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
-
-                total_preds.append(preds.detach().cpu().numpy())
-                total_max_probs.append(max_probs.detach().cpu().numpy())
-                total_file_id.append(file_id)
-
-        total_file_id = np.concatenate(total_file_id, axis=0)
-        total_preds = np.concatenate(total_preds, axis=0)
-        total_max_probs = np.concatenate(total_max_probs, axis=0)
-
-        eval_info = '{} Picking confident samples... \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
-
-        conf_preds = np.zeros(len(total_preds))
-        conf_preds[total_max_probs > self.args.theta] = 1
-
-        total_file_id_conf = total_file_id[conf_preds == 1]
-        total_preds_conf = total_preds[conf_preds == 1]
-
-        total_file_id_unconf = total_file_id[conf_preds == 0]
-        total_preds_unconf = total_preds[conf_preds == 0]
-
-        eval_info += 'Total confident sample count is {} out of {} non-empty samples ({:3f}%) \n'.format(len(total_preds_conf), len(total_preds), 100 * (len(total_preds_conf) / len(total_preds)))
-        eval_info += 'Total unconfident sample count is {} out of {} non-empty samples ({:3f}%) \n'.format(len(total_preds_unconf), len(total_preds), 100 * (len(total_preds_unconf) / len(total_preds)))
-
-        return eval_info, (total_file_id_conf, total_preds_conf), (total_file_id_unconf, total_preds_unconf)
-
-    def deploy_ood_epoch(self, loader):
-
-        self.net.eval()
-
-        total_preds = []
-
-        # Forward and record # correct predictions of each class
-        with torch.set_grad_enabled(False):
-
-            for data, file_id in tqdm(loader, total=len(loader)):
-
-                # setup data
-                data = data.cuda()
-                data.requires_grad = False
-
-                # forward
-                _, logits, values_nn, meta_feats = self.memory_forward(data)
-
-                # feats_expand = meta_feats.clone().unsqueeze(1).expand(-1, len(self.meta_centroids), -1)
-                #
-                # centroids_expand = self.meta_centroids.clone().unsqueeze(0).expand(len(data), -1, -1)
-                #
-                # # computing reachability
-                # dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
-                # # Sort distances
-                # values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
-                # # expand to logits dimension and scale the smallest distance
-                # # reachability = (self.args.reachability_scale / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                # reachability = (20 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                # # scale logits with reachability
-                # logits = reachability * logits
-
-                # scale logits with reachability
-                # logits /= torch.norm(logits, 2, 1, keepdim=True).clone()
-                reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
-                                       .unsqueeze(1).expand(-1, logits.shape[1]))
-                logits = reachability_logits * logits
-
-                # compute correct
-                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
-
-                # Set unconfident prediction to 1
-                preds[max_probs < self.args.theta] = 1
-                preds[max_probs >= self.args.theta] = 0
-
-                total_preds.append(preds.detach().cpu().numpy())
-
-        total_preds = np.concatenate(total_preds, axis=0)
-        unconf_unknown_percent = total_preds.sum() / len(total_preds)
-
-        eval_info = 'Unconf Unknown Percentage: {:3f}\n'.format(unconf_unknown_percent * 100)
-
-        return eval_info
-
-    def deploy_ood(self, loader):
-        # self.logger.info('Calculating GT meta centroids.\n')
-        # self.meta_centroids = self.centroids_cal(self.trainloader_cent)
-        eval_info = self.deploy_ood_epoch(loader)
-        self.logger.info(eval_info)
-
+    def save_model(self):
+        os.makedirs(self.weights_path.rsplit('/', 1)[0], exist_ok=True)
+        self.logger.info('Saving to {}'.format(self.weights_path))
+        self.net.save(self.weights_path)
