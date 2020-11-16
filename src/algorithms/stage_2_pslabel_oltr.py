@@ -72,14 +72,14 @@ def load_data(args, conf_preds, pseudo_labels):
     return trainloader_no_up,  valloader, valloaderunknown, deployloader
 
 
-@register_algorithm('GTPSMemoryStage2_ConfPseu_SoftIter_TUNE')
+@register_algorithm('SemiStage2OLTR')
 class OLTR(Algorithm):
 
     """
     Overall training function.
     """
 
-    name = 'GTPSMemoryStage2_ConfPseu_SoftIter_TUNE'
+    name = 'SemiStage2OLTR'
     net = None
     opt_net = None
     scheduler = None
