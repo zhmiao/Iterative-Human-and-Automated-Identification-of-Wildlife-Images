@@ -56,4 +56,4 @@ T: 10  # Temperature
 alpha: 0.5  # Soft-hard ratio
 
 # confidence
-theta: 0.95
+theta: 0.75
