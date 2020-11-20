@@ -56,6 +56,6 @@ T: 10  # Temperature
 alpha: 0.5  # Soft-hard ratio
 
 # confidence
-# theta: 0.75 # sess 1
+theta: 0.75 # sess 1
 # theta: 0.9 # sess 2 tr
 # theta: 0.95 # sess 3
