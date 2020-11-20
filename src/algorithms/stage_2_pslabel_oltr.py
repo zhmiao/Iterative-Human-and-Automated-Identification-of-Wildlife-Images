@@ -193,6 +193,22 @@ class OLTR(Algorithm):
 
         cls_idx = class_indices[self.args.class_indices]
 
+        self.logger.info('\nTRAINLOADER_EVAL....')
+        self.trainloader_eval = load_dataset(name=self.args.dataset_name,
+                                             class_indices=cls_idx,
+                                             dset='train',
+                                             transform='eval',
+                                             rootdir=self.args.dataset_root,
+                                             batch_size=self.args.batch_size,
+                                             shuffle=False,
+                                             num_workers=self.args.num_workers,
+                                             cas_sampler=False,
+                                             conf_preds=self.conf_preds,
+                                             pseudo_labels_hard=self.pseudo_labels_hard,
+                                             pseudo_labels_soft=None,
+                                             GTPS_mode='both')
+
+
         self.logger.info('\nTRAINLOADER_UP_GT....')
         self.trainloader_up_gt = load_dataset(name=self.args.dataset_name,
                                               class_indices=cls_idx,
@@ -342,11 +358,20 @@ class OLTR(Algorithm):
             return eval_acc_mac, eval_acc_mic
 
     def deploy(self, loader):
-        eval_info, f1, conf_preds = self.deploy_epoch(loader)
+        eval_info, f1, conf_preds, pseudo_hard, pseudo_soft = self.deploy_epoch(loader)
         self.logger.info(eval_info)
         conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
         self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
         conf_preds.tofile(conf_preds_path)
+
+        pseudo_hard_path = self.weights_path.replace('.pth', '_pseudo_hard.npy')
+        self.logger.info('Saving hard pseudo labels to {}'.format(pseudo_hard_path))
+        pseudo_hard.tofile(pseudo_hard_path)
+
+        pseudo_soft_path = self.weights_path.replace('.pth', '_pseudo_soft.npy')
+        self.logger.info('Saving soft pseudo targets to {}'.format(pseudo_soft_path))
+        pseudo_soft.tofile(pseudo_soft_path)
+
         return f1
 
     def train_epoch(self, epoch, soft=False):
@@ -503,13 +528,13 @@ class OLTR(Algorithm):
         self.net.eval()
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        total_preds, total_labels, _ = self.evaluate_forward(loader, hall=False,
-                                                             ood=True, out_conf=False)
+        total_preds, total_labels, total_logits = self.evaluate_forward(loader, hall=False,
+                                                                        ood=True, out_conf=False)
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
         eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, 
                                                          eval_class_counts, ood=True)
-        return eval_info, f1, conf_preds
+        return eval_info, f1, conf_preds,  total_preds, total_logits
 
     def memory_forward(self, data):
         # feature

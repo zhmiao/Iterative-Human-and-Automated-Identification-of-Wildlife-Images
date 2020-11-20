@@ -1,11 +1,10 @@
 # training
-conf_id: 111120_MOZ_PSLABEL_OLTR
-algorithm: SemiStage2OLTR
-oltr_epochs: 30
+conf_id: 111620_MOZ_PSLABEL_OLTR_Energy
+algorithm: SemiStage2OLTR_Energy
+num_epochs: 10
+no_up_freq: 2 
 log_interval: 10
-no_up_freq: 3
 limit_steps: 1
-semi_iters: 3  # Iterations for semi-supervised learning
 ## lr_scheduler
 step_size: 10
 gamma: 0.1
@@ -17,28 +16,27 @@ unknown_dataset_name: MOZ_UNKNOWN
 deploy_dataset_name: MOZ_S3_ALL
 class_indices: MOZ_S2_LT
 train_transform: MOZ
-batch_size: 96
+batch_size: 32
 num_workers: 8
 num_samples_cls: 2
 
 # model
 model_name: SoftOLTRResNetClassifier
 num_layers: 50
-# weights_init: ./weights/EnergyStage1/101920_MOZ_S1_1_ft.pth
-weights_init: ./weights/GTFineTuneStage2/102620_MOZ_S2_FT_GT_0.pth
+weights_init: ./weights/SemiStage2OLTR/111120_MOZ_PSLABEL_OLTR_0.pth
 
 # optim
 ## feature
-lr_feature: 0.0001
+lr_feature: 0.000001
 momentum_feature: 0.9
 weight_decay_feature: 0.0005
 ## classifier
 # lr_classifier: 0.01 # Session 0
-lr_classifier: 0.01
+lr_classifier: 0.00001
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
 ## memory
-lr_memory: 0.0001
+lr_memory: 0.000001
 momentum_memory: 0.9
 weight_decay_memory: 0.0005
 
@@ -57,5 +55,7 @@ alpha: 0.5  # Soft-hard ratio
 
 # confidence
 # theta: 0.75 # sess 1
-# theta: 0.9 # sess 2 tr
-# theta: 0.95 # sess 3
+theta: 0.8 # sess 2
+# energy_the: 14.4
+energy_the: 8.5
+energy_T: 1.5
