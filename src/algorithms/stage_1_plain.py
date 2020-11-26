@@ -314,12 +314,20 @@ class PlainStage1(Algorithm):
 
             eval_info = '{} Per-class evaluation results: \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
+            class_conf_cts = []
+
             for i in range(len(class_acc_confident)):
+                
+                class_conf_cts.append(int(eval_class_counts[i] * class_percent_confident[i]))
+
                 eval_info += 'Class {} (tr {} / '.format(i, self.train_class_counts[i])
                 eval_info += 'ann {}): '.format(self.train_annotation_counts[i])
                 eval_info += 'Conf %: {:.2f}; '.format(class_percent_confident[i] * 100)
-                eval_info += 'Unconf wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
-                eval_info += 'Conf Acc: {:.3f}; \n'.format(class_acc_confident[i] * 100)
+                eval_info += 'Unconf Wrong %: {:.2f}; '.format(class_wrong_percent_unconfident[i] * 100)
+                eval_info += 'Conf Acc: {:.3f}; '.format(class_acc_confident[i] * 100)
+                eval_info += 'Conf Cts: {:.2f}; \n'.format(int(eval_class_counts[i] * class_percent_confident[i]))
+
+            class_conf_cts = np.array(class_conf_cts)
 
             eval_info += 'Overall F1: {:.3f}; \n'.format(f1)
             eval_info += 'False positive %: {:.3f}; \n'.format(false_pos_percent * 100)
@@ -327,9 +335,12 @@ class PlainStage1(Algorithm):
                                                                         int(percent_unknown * total_unknown),
                                                                         total_unknown)
 
-            eval_info += 'Avg conf %: {:.3f} ({}/{}); \n'.format(class_percent_confident.mean() * 100,
-                                                                 int(class_percent_confident.mean() * total_known),
-                                                                 total_known)
+            eval_info += 'Mac avg conf %: {:.3f}; \n'.format(class_percent_confident.mean() * 100)
+
+            eval_info += 'Mic avg conf %: {:.3f} ({}/{}); \n'.format((class_conf_cts.sum() / eval_class_counts.sum()) * 100,
+                                                                     class_conf_cts.sum(),
+                                                                     eval_class_counts.sum())
+
             eval_info += 'Avg unconf wrong %: {:.3f}; \n'.format(class_wrong_percent_unconfident.mean() * 100)
             eval_info += 'Conf acc %: {:.3f}; \n'.format(class_acc_confident.mean() * 100)
 

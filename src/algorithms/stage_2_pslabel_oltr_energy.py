@@ -82,13 +82,13 @@ class OLTR_Energy(OLTR):
         ###############################
         self.logger.info('\nGetting {} model.'.format(self.args.model_name))
         self.logger.info('\nLoading from {}'.format(self.weights_path.replace('.pth', '_ft.pth')))
-        # self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-        #                      weights_init=self.weights_path.replace('.pth', '_ft.pth'),
-        #                      num_layers=self.args.num_layers, init_feat_only=False)
-
         self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
-                             weights_init=self.args.weights_init,
+                             weights_init=self.weights_path.replace('.pth', '_ft.pth'),
                              num_layers=self.args.num_layers, init_feat_only=False)
+
+        # self.net = get_model(name=self.args.model_name, num_cls=len(class_indices[self.args.class_indices]),
+        #                      weights_init=self.args.weights_init,
+        #                      num_layers=self.args.num_layers, init_feat_only=False)
 
     def set_optimizers(self):
         def cosine_annealing(step, total_steps, lr_max, lr_min):
@@ -260,16 +260,17 @@ class OLTR_Energy(OLTR):
             loader_gt = self.trainloader_no_up_gt
             loader_ps = self.trainloader_no_up_ps
             up = False
+            N = self.max_batch
         else:
             loader_gt = self.trainloader_up_gt
             loader_ps = self.trainloader_up_ps
             up = True
+            N = self.max_batch * 2
 
         iter_gt = iter(loader_gt)
         iter_ps = iter(loader_ps)
         out_iter = iter(self.trainloaderunknown)
 
-        N = self.max_batch
 
         for batch_idx in range(N):
 
@@ -331,7 +332,7 @@ class OLTR_Energy(OLTR):
             eb_loss = torch.pow(F.relu(Ec_in - m_in), 2).mean() + torch.pow(F.relu(m_out - Ec_out), 2).mean()
             
             
-            loss = oltr_loss + 0.01 * eb_loss
+            loss = oltr_loss + 0.001 * eb_loss
 
             #############################
             # Backward and optimization #
@@ -369,7 +370,7 @@ class OLTR_Energy(OLTR):
                                                                            eb_loss.item())
                 self.logger.info(info_str)
 
-    def evaluate_forward(self, loader, hall=False, ood=False, out_conf=False, T=7):
+    def evaluate_forward(self, loader, hall=False, ood=False, out_conf=False):
 
         if hall: 
             self.logger.info("\n** Using hallucinator for evaluation **\n")
@@ -402,8 +403,7 @@ class OLTR_Energy(OLTR):
                 if ood:
                     energy_score = -(self.args.energy_T * torch.logsumexp(logits / self.args.energy_T, dim=1))
                     # Set unconfident prediction to -1
-                    # preds[-energy_score <= self.args.energy_the] = -1
-                    preds[-energy_score <= T] = -1
+                    preds[-energy_score <= self.args.energy_the] = -1
 
                 total_preds.append(preds.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
@@ -420,44 +420,15 @@ class OLTR_Energy(OLTR):
 
     def evaluate(self, loader, hall=False, ood=False):
         if ood:
-            # eval_info, f1, _ = self.ood_evaluate_epoch(loader, self.valloaderunknown, hall=hall)
-            # self.logger.info(eval_info)
-            # return f1
-            for t in np.arange(8, 9.5, 0.1):
-                self.logger.info('\nCurrent T: {}'.format(t))
-                eval_info, f1, _ = self.ood_evaluate_epoch(loader, self.valloaderunknown, hall=hall, T=t)
-                self.logger.info(eval_info)
+            # the = 6.77
+            # T = 0.06
+            self.logger.info('\nCurrent T: {}'.format(T))
+            self.logger.info('\nCurrent the: {}'.format(the))
+            eval_info, f1, _ = self.ood_evaluate_epoch(loader, self.valloaderunknown, hall=hall)
+            self.logger.info(eval_info)
             
             return f1
         else:
             eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader, hall=hall)
             self.logger.info(eval_info)
             return eval_acc_mac, eval_acc_mic
-
-    def ood_evaluate_epoch(self, loader_in, loader_out, hall=False, T=7):
-        self.net.eval()
-        # Get unique classes in the loader and corresponding counts
-        loader_uni_class_in, eval_class_counts_in = loader_in.dataset.class_counts_cal()
-        loader_uni_class_out, eval_class_counts_out = loader_out.dataset.class_counts_cal()
-
-        self.logger.info("Forward through in test loader\n")
-        total_preds_in, total_labels_in, _ = self.evaluate_forward(loader_in, hall=hall,
-                                                                   ood=True, out_conf=False, T=T)
-        total_preds_in = np.concatenate(total_preds_in, axis=0)
-        total_labels_in = np.concatenate(total_labels_in, axis=0)
-
-        self.logger.info("Forward through out test loader\n")
-        total_preds_out, total_labels_out, _ = self.evaluate_forward(loader_out, hall=hall,
-                                                                     ood=True, out_conf=False, T=T)
-        total_preds_out = np.concatenate(total_preds_out, axis=0)
-        total_labels_out = np.concatenate(total_labels_out, axis=0)
-
-        total_preds = np.concatenate((total_preds_out, total_preds_in), axis=0)
-        total_labels = np.concatenate((total_labels_out, total_labels_in), axis=0)
-        loader_uni_class = np.concatenate((loader_uni_class_out, loader_uni_class_in), axis=0)
-        eval_class_counts = np.concatenate((eval_class_counts_out, eval_class_counts_in), axis=0)
-
-        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, 
-                                                         eval_class_counts, ood=True)
-
-        return eval_info, f1, conf_preds

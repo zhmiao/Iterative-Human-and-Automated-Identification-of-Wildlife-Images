@@ -2,7 +2,7 @@
 conf_id: 111620_MOZ_PSLABEL_OLTR_Energy
 algorithm: SemiStage2OLTR_Energy
 num_epochs: 10
-no_up_freq: 2 
+no_up_freq: 3
 log_interval: 10
 limit_steps: 1
 ## lr_scheduler
@@ -23,20 +23,20 @@ num_samples_cls: 2
 # model
 model_name: SoftOLTRResNetClassifier
 num_layers: 50
-weights_init: ./weights/SemiStage2OLTR/111120_MOZ_PSLABEL_OLTR_0.pth
+weights_init: ./weights/SemiStage2OLTR/111120_MOZ_PSLABEL_OLTR_3.pth
 
 # optim
 ## feature
-lr_feature: 0.000001
+lr_feature: 0.0000001
 momentum_feature: 0.9
 weight_decay_feature: 0.0005
 ## classifier
 # lr_classifier: 0.01 # Session 0
-lr_classifier: 0.00001
+lr_classifier: 0.000001
 momentum_classifier: 0.9
 weight_decay_classifier: 0.0005
 ## memory
-lr_memory: 0.000001
+lr_memory: 0.0000001
 momentum_memory: 0.9
 weight_decay_memory: 0.0005
 
@@ -57,5 +57,5 @@ alpha: 0.5  # Soft-hard ratio
 # theta: 0.75 # sess 1
 theta: 0.8 # sess 2
 # energy_the: 14.4
-energy_the: 8.5
-energy_T: 1.5
+energy_the: 6.77
+energy_T: 0.06
