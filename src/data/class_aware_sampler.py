@@ -53,8 +53,10 @@ def class_aware_sample_generator(cls_iter, data_iter_list, n, num_samples_cls=1)
 class ClassAwareSampler(Sampler):
 
     def __init__(self, labels, num_samples_cls=1):
-        num_classes = len(np.unique(labels))
-        self.class_iter = RandomCycleIter(range(num_classes))
+        # num_classes = len(np.unique(labels))
+        num_classes = max(labels) + 1
+        # self.class_iter = RandomCycleIter(range(num_classes))
+        self.class_iter = RandomCycleIter(np.unique(labels))
         cls_data_list = [list() for _ in range(num_classes)]
         for i, label in enumerate(labels):
             cls_data_list[label].append(i)

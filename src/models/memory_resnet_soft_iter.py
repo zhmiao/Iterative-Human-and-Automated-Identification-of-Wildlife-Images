@@ -4,6 +4,7 @@ import math
 from collections import OrderedDict
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.hub import load_state_dict_from_url
 from torch.autograd.function import Function
 
@@ -11,13 +12,13 @@ from .utils import register_model, BaseModule
 from .resnet_backbone import ResNetFeature, BasicBlock, Bottleneck, model_urls
 
 
-@register_model('MemoryResNetClassifier')
-class MemoryResNetClassifier(BaseModule):
+@register_model('SoftOLTRResNetClassifier')
+class SoftOLTRResNetClassifier(BaseModule):
 
-    name = 'MemoryResNetClassifier'
+    name = 'SoftOLTRResNetClassifier'
 
-    def __init__(self, num_cls=10, weights_init='ImageNet', num_layers=18, init_feat_only=True):
-        super(MemoryResNetClassifier, self).__init__()
+    def __init__(self, num_cls=10, weights_init='ImageNet', num_layers=18, init_feat_only=True, T=None, alpha=None):
+        super(SoftOLTRResNetClassifier, self).__init__()
         self.num_cls = num_cls
         self.num_layers = num_layers
         self.feature = None
@@ -28,6 +29,8 @@ class MemoryResNetClassifier(BaseModule):
         self.criterion_ctr = None
         self.best_weights = None
         self.feature_dim = None
+        self.T = T
+        self.alpha = alpha
 
         # Model setup and weights initialization
         self.setup_net()
@@ -67,8 +70,27 @@ class MemoryResNetClassifier(BaseModule):
         self.cosnorm_classifier = CosNorm_Classifier(self.feature_dim, self.num_cls)
 
     def setup_critera(self):
-        self.criterion_cls = nn.CrossEntropyLoss()
+        self.criterion_cls_hard = nn.CrossEntropyLoss()
+        self.criterion_cls_soft = self._make_distill_criterion(alpha=self.alpha, T=self.T)
         self.criterion_ctr = DiscCentroidsLoss(self.num_cls, self.feature_dim)
+
+    @staticmethod
+    def _make_distill_criterion(alpha=0.5, T=4.0):
+        print('** alpha is {} and temperature is {} **\n'.format(alpha, T))
+        def criterion(outputs, labels, targets):
+            # Soft cross entropy
+            _p = F.log_softmax(outputs / T, dim=1)
+            _q = F.softmax(targets / T, dim=1)
+
+            # _soft_loss = -torch.mean(torch.sum(_q * _p, dim=1))
+            _soft_loss = nn.KLDivLoss()(_p, _q)
+
+            # Soft hard combination
+            _soft_loss = _soft_loss * T * T
+            _hard_loss = F.cross_entropy(outputs, labels)
+            loss = alpha * _soft_loss + (1. - alpha) * _hard_loss
+            return loss
+        return criterion
 
     def load(self, init_path, feat_only=False):
 
@@ -78,6 +100,11 @@ class MemoryResNetClassifier(BaseModule):
             init_weights = torch.load(init_path)
 
         if feat_only:
+            # init_weights = OrderedDict({k.replace('feature.', ''): init_weights[k] for k in init_weights})
+            # self.feature.load_state_dict(init_weights, strict=False)
+            # load_keys = set(init_weights.keys())
+            # self_keys = set(self.feature.state_dict().keys())
+
             init_weights_feat = OrderedDict({k.replace('feature.', ''): init_weights[k] for k in init_weights})
             self.feature.load_state_dict(init_weights_feat, strict=False)
             load_keys_feat = set(init_weights_feat.keys())
@@ -90,7 +117,7 @@ class MemoryResNetClassifier(BaseModule):
 
             load_keys = load_keys_feat.union(load_keys_hall)
             self_keys = self_keys_feat.intersection(self_keys_hall)
-            
+
         else:
             self.load_state_dict(init_weights, strict=False)
             load_keys = set(init_weights.keys())
@@ -156,12 +183,6 @@ class DiscCentroidsLoss(nn.Module):
         batch_size_tensor = feat.new_empty(1).fill_(batch_size if self.size_average else 1)
 
         loss_attract = self.disccentroidslossfunc(feat.clone(), label, self.centroids.clone(), batch_size_tensor).squeeze()
-
-        # centroids_batch = self.centroids.clone().index_select(0, label.long())
-        # 
-        # margin_attract = 10
-        # 
-        # loss_attract = ((feat.clone() - centroids_batch).pow(2).sum() / 2.0 - margin_attract) / batch_size
 
         ############################
         # calculate repelling loss #

@@ -1,5 +1,4 @@
 import os
-
 import yaml
 import logging
 from argparse import ArgumentParser
@@ -20,8 +19,12 @@ parser.add_argument('--np_threads', default=4,
                     help='Num of threads of numpy.')
 parser.add_argument('--evaluate', default=False, action='store_true',
                     help='If evaluate the model.')
+parser.add_argument('--ood', default=False, action='store_true',
+                    help='If evaluate the model ood.')
 parser.add_argument('--deploy', default=False, action='store_true',
                     help='Actual model deployment.')
+parser.add_argument('--energy_ft', default=False, action='store_true',
+                    help='Mode for fine-tuning ood.')
 args = parser.parse_args()
 
 #############################
@@ -63,13 +66,16 @@ setattr(args, 'logger', logger)
 alg = get_algorithm(args.algorithm, args)
 if args.evaluate:
     alg.set_eval()
-    alg.logger.info('\nTesting...')
-    _ = alg.evaluate(loader=alg.testloader)
-    # _ = alg.evaluate(loader=alg.valloader)
+    alg.logger.info('\nValidating...')
+    _ = alg.evaluate(loader=alg.valloader, ood=args.ood)
 elif args.deploy:
     alg.set_eval()
     alg.logger.info('\nDeploying...')
     alg.deploy(loader=alg.deployloader)
+elif args.energy_ft:
+    alg.set_train()
+    alg.logger.info('\nEnergy Fine-tuning...')
+    alg.energy_ft()
 else:
     alg.set_train()
     alg.logger.info('\nTraining...')

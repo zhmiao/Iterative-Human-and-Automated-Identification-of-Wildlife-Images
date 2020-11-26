@@ -1,0 +1,46 @@
+# training
+conf_id: 110320_MOZ_S2_SEMI_LDAM
+algorithm: LDAMSemiStage2
+num_epochs: 30
+log_interval: 10
+limit_steps: 0
+
+# data
+dataset_root: /home/zhmiao/datasets/ecology
+dataset_name: MOZ_S2_LT_GTPS_LABEL
+unknown_dataset_name: MOZ_UNKNOWN
+deploy_dataset_name: MOZ_S3_ALL
+class_indices: MOZ_S2_LT
+train_transform: MOZ
+batch_size: 96
+num_workers: 4
+
+# model
+model_name: PlainResNetClassifier
+num_layers: 50
+# weights_init: ./weights/EnergyStage1/101920_MOZ_S1_0_ft.pth
+weights_init: ./weights/LDAMGTFineTuneStage2/110220_MOZ_S2_FT_GT_LDAM_1.pth 
+
+# optim
+## feature
+lr_feature: 0.0001 # sess 1
+momentum_feature: 0.9
+weight_decay_feature: 0.0005
+## classifier
+lr_classifier: 0.001 # sess1
+momentum_classifier: 0.9
+weight_decay_classifier: 0.0005
+## lr_scheduler
+step_size: 10
+gamma: 0.1
+
+# confidence
+theta: 0.70
+# energy_the: 13.7
+energy_the: 15
+energy_T: 1.5
+
+# SoftIter
+T: 10  # Temperature
+alpha: 0.5  # Soft-hard ratio
+

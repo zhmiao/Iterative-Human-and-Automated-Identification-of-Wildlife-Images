@@ -6,23 +6,42 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
 from src.data.class_aware_sampler import ClassAwareSampler
+from src.data.randaugment import RandAugment
+
+class TransformFix(object):
+    def __init__(self, mean, std, s_only=False):
+        self.s_only = s_only
+        self.weak = transforms.Compose([
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+        ])
+        self.strong = transforms.Compose([
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            RandAugment(n=2, m=10)
+        ])
+        self.normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)])
+
+    def __call__(self, x):
+        weak = self.weak(x)
+        strong = self.strong(x)
+        if self.s_only:
+            return self.normalize(strong)
+        else:
+            return self.normalize(weak), self.normalize(strong)
+        # return self.normalize(strong)
+
 
 # Standard data transform with resize and typical augmentation
 data_transforms = {
-    'train': transforms.Compose([
-        # transforms.RandomResizedCrop(224, scale=(0.5, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
-        transforms.RandomResizedCrop(224, scale=(0.08, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
     'train_strong': transforms.Compose([
         transforms.RandomGrayscale(p=0.1),
         transforms.RandomResizedCrop(224, scale=(0.08, 1.0), ratio=(3.5/4.0, 3.5/3.0)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(45, fill=(123, 116, 103)),
-        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
@@ -34,6 +53,8 @@ data_transforms = {
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
+    'MOZ_Unlabeled': TransformFix([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    'MOZ_Pseudolabeled': TransformFix([0.485, 0.456, 0.406], [0.229, 0.224, 0.225], s_only=True),
     'eval': transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
@@ -56,7 +77,7 @@ def register_dataset_obj(name):
     return decorator
 
 
-def get_dataset(name, rootdir, class_indices, dset, transform, split, **add_args):
+def get_dataset(name, rootdir, class_indices, dset, transform, **add_args):
 
     """
     Dataset getter
@@ -64,14 +85,11 @@ def get_dataset(name, rootdir, class_indices, dset, transform, split, **add_args
 
     print('Getting dataset: {} {} {} \n'.format(name, rootdir, dset))
 
-    if dset != 'train':
-        split = None
-
-    return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, split=split,
+    return dataset_obj[name](rootdir, class_indices=class_indices, dset=dset, 
                              transform=data_transforms[transform], **add_args)
 
 
-def load_dataset(name, class_indices, dset, transform, split, batch_size=64, rootdir='',
+def load_dataset(name, class_indices, dset, transform, batch_size=64, rootdir='',
                  shuffle=True, num_workers=1, cas_sampler=False, **add_args):
 
     """
@@ -83,7 +101,7 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
 
     print('Shuffle is {}.'.format(shuffle))
 
-    dataset = get_dataset(name, rootdir, class_indices, dset, transform, split=split, **add_args)
+    dataset = get_dataset(name, rootdir, class_indices, dset, transform, **add_args)
 
     if len(dataset) == 0:
         return None
@@ -103,12 +121,11 @@ def load_dataset(name, class_indices, dset, transform, split, batch_size=64, roo
 
 class BaseDataset(Dataset):
 
-    def __init__(self, class_indices, dset='train', split=None, transform=None):
+    def __init__(self, class_indices, dset='train', transform=None):
         self.img_root = None
         self.ann_root = None
         self.class_indices = class_indices
         self.dset = dset
-        self.split = split
         self.transform = transform
         self.data = []
         self.labels = []
@@ -119,37 +136,6 @@ class BaseDataset(Dataset):
     def class_counts_cal(self):
         unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
         return unique_labels, unique_counts
-
-    def data_split(self):
-        print('Splitting data to {} samples each class maximum.'.format(self.split))
-
-        self.data = np.array(self.data)
-        self.labels = np.array(self.labels)
-
-        data_sel = np.empty(shape=0)
-        labels_sel = np.empty(shape=0)
-
-        unique_labels, unique_counts = np.unique(self.labels, return_counts=True)
-
-        for label, counts in zip(unique_labels, unique_counts):
-
-            data_cat = self.data[self.labels == label]
-            labels_cat = self.labels[self.labels == label]
-
-            if counts > self.split:
-
-                np.random.seed(label)
-
-                indices_sel = np.random.choice(np.arange(len(data_cat)), self.split, replace=False)
-
-                data_sel = np.concatenate((data_sel, data_cat[indices_sel]))
-                labels_sel = np.concatenate((labels_sel, labels_cat[indices_sel]))
-            else:
-                data_sel = np.concatenate((data_sel, data_cat))
-                labels_sel = np.concatenate((labels_sel, labels_cat))
-
-        self.data = list(data_sel)
-        self.labels = list(labels_sel.astype(int))
 
     def __len__(self):
         return len(self.labels)

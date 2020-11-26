@@ -1,5 +1,7 @@
 import numpy as np
 from copy import deepcopy
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 
@@ -102,15 +104,11 @@ class WarmupScheduler:
         self.epoch += 1
 
 
-def acc(preds, labels, train_label_counts):
+def acc(preds, labels):
 
-    class_counts_dict = {l: c for l, c in zip(*np.unique(labels, return_counts=True))}
+    _, label_counts = np.unique(labels, return_counts=True)
 
-    label_counts = np.array([class_counts_dict[c]
-                             if c in class_counts_dict else 1e-7 for c in
-                             range(len(train_label_counts))])
-
-    class_correct = np.array([0. for _ in range(len(train_label_counts))])
+    class_correct = np.array([0. for _ in range(len(label_counts))])
 
     for p, l in zip(preds, labels):
         if p == l:
@@ -167,8 +165,9 @@ def confident_metrics(preds, labels, class_counts):
     class_acc_confident = class_correct_confident / class_select_confident
     class_percent_confident = class_select_confident / class_counts[1:]
     false_pos_percent = false_pos_counts / len(labels_confident)
+    total_known = len(labels[labels != -1])
 
-    return class_acc_confident, class_percent_confident, false_pos_percent
+    return class_acc_confident, class_percent_confident, false_pos_percent, total_known
 
 
 def unconfident_metrics(preds, labels):
@@ -207,74 +206,47 @@ def unknown_metrics(preds, labels):
         # record all unconfident samples
         total_unknown += 1
 
-    breakpoint()
-
     percent_unknown = correct_unknown / total_unknown
 
-    return percent_unknown
+    return percent_unknown, total_unknown
 
 
-def stage_1_metric(preds, labels, unique_classes, class_counts):
+def ood_metric(preds, labels, class_counts):
     # f1
     f1 = f_measure(preds, labels)
     # Confident
-    class_acc_confident, class_percent_confident, false_pos_percent = confident_metrics(preds, labels, class_counts)
+    class_acc_confident, class_percent_confident, false_pos_percent, total_known = confident_metrics(preds, labels, class_counts)
     # Unconfident
     class_wrong_unconfident = unconfident_metrics(preds, labels)
     # Open
-    percent_unknown = unknown_metrics(preds, labels)
+    percent_unknown, total_unknown = unknown_metrics(preds, labels)
     # Confident indices
     conf_preds = np.zeros(len(preds))
     conf_preds[preds != -1] = 1
-    return f1, class_acc_confident, class_percent_confident, false_pos_percent,\
-           class_wrong_unconfident, percent_unknown, conf_preds
+    return (f1, class_acc_confident, class_percent_confident, false_pos_percent,
+            class_wrong_unconfident, percent_unknown, total_unknown, total_known, conf_preds)
 
 
-def stage_2_metric(preds, max_probs, labels, train_unique_labels, theta):
+class LDAMLoss(nn.Module):
+    
+    def __init__(self, cls_num_list, max_m=0.3, weight=None, s=30):
+        super(LDAMLoss, self).__init__()
+        m_list = 1.0 / np.sqrt(np.sqrt(cls_num_list))
+        m_list = m_list * (max_m / np.max(m_list))
+        m_list = torch.cuda.FloatTensor(m_list)
+        self.m_list = m_list
+        assert s > 0
+        self.s = s
+        self.weight = weight
 
-    # TODO: Enable open classes.
-
-    num_cls = len(train_unique_labels)
-
-    missing_cls_in_test = list(set(train_unique_labels) - set(np.unique(labels)))
-    missing_cls_in_train = list(set(np.unique(labels)) - set(train_unique_labels))
-
-    class_unconf_wrong = np.array([0. for _ in range(num_cls)])
-    class_unconf_correct = np.array([0. for _ in range(num_cls)])
-    class_conf_correct = np.array([0. for _ in range(num_cls)])
-
-    class_wrong = np.array([1e-7 for _ in range(num_cls)])
-    class_correct = np.array([1e-7 for _ in range(num_cls)])
-    class_conf = np.array([1e-7 for _ in range(num_cls)])
-
-    # Confident indices
-    conf_preds = np.zeros(len(preds))
-    conf_preds[max_probs > theta] = 1
-    total_unconf = (conf_preds == 0).sum()
-
-    for i in range(len(preds)):
-
-        pred = preds[i]
-        label = labels[i]
-        conf = conf_preds[i]
-
-        if pred == label:
-            class_correct[label] += 1
-            if conf == 0:
-                class_unconf_correct[label] += 1
-            else:
-                class_conf_correct[label] += 1
-                class_conf[label] += 1
-        else:
-            class_wrong[label] += 1
-            if conf == 0:
-                class_unconf_wrong[label] += 1
-            else:
-                class_conf[label] += 1
-
-    return class_unconf_wrong / class_wrong,\
-           class_unconf_correct / class_correct,\
-           class_conf_correct / class_conf,\
-           total_unconf,\
-           missing_cls_in_test,\
-           missing_cls_in_train
+    def forward(self, x, target, reduction='mean'):
+        index = torch.zeros_like(x, dtype=torch.uint8)
+        index.scatter_(1, target.data.view(-1, 1), 1)
+        
+        index_float = index.type(torch.cuda.FloatTensor)
+        batch_m = torch.matmul(self.m_list[None, :], index_float.transpose(0,1))
+        batch_m = batch_m.view((-1, 1))
+        x_m = x - batch_m
+    
+        output = torch.where(index, x_m, x)
+        return F.cross_entropy(self.s*output, target, weight=self.weight, reduction=reduction)

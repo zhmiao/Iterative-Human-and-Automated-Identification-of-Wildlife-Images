@@ -1,0 +1,40 @@
+# training
+conf_id: 101920_MOZ_S1
+algorithm: EnergyStage1
+num_epochs: 20
+log_interval: 10
+limit_steps: 0
+
+# data
+dataset_root: /home/zhmiao/datasets/ecology
+dataset_name: MOZ_S1_LT
+unknown_dataset_name: MOZ_UNKNOWN
+deploy_dataset_name: MOZ_S2_LT_FULL
+class_indices: MOZ_S1_LT
+train_transform: MOZ
+batch_size: 32
+num_workers: 8
+
+# model
+model_name: PlainResNetClassifier
+num_layers: 50
+weights_init: ImageNet
+
+# optim
+## feature
+lr_feature: 0.00001
+momentum_feature: 0.9
+weight_decay_feature: 0.0005
+## classifier
+lr_classifier: 0.0001
+momentum_classifier: 0.9
+weight_decay_classifier: 0.0005
+## lr_scheduler
+step_size: 15
+gamma: 0.1
+
+# confidence
+energy_the: 13.7
+# energy_the: 14.4
+energy_T: 1.5
+
