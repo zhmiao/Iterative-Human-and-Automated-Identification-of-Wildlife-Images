@@ -1,9 +1,12 @@
 # %% codecell
 import os
 import numpy as np
+import pandas as pd
 import random
 from tqdm import tqdm
 from PIL import Image
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # %% codecell
 rename = {
@@ -132,12 +135,33 @@ sec_list_all = np.concatenate((sec_list_s1, sec_list_s2), axis=0)
 cat_sel_counts_all, cat_leftout_counts_all = category_selection(label_list_all, min_count=50)
 
 # %% codecell
-len(cat_sel_counts_all)
+# len(cat_sel_counts_all)
 cat_sel_counts_all
 
+# %%
+len(cat_sel_counts_all)
+
 # %% codecell
+# len(cat_leftout_counts_all)
 len(cat_leftout_counts_all)
-cat_leftout_counts_all
+
+# %%
+# Distribution Ploting
+used_cat = [(cat, c, 0) for cat, c in cat_sel_counts_all]
+used_cat += [(cat, c, 1) for cat, c in cat_leftout_counts_all if cat != 'Mongoose_dwarf']
+used_cat = sorted(used_cat, key=lambda x:x[1], reverse=True)
+
+cat = [e[0] for e in used_cat]
+ct = [e[1] for e in used_cat]
+ood = ['Selected as unknown categories' if e[2] else 'Selected as known categories' for e in used_cat]
+
+sns.set(font_scale=2, style='whitegrid')
+plt.subplots(figsize=(15, 30))
+ax = sns.barplot(x=ct, y=cat, hue=ood, dodge=False)
+ax.set_title('Distribution of the whole dataset', fontsize=35, y=1.01)
+ax.set_xscale('log')
+ax.set_xlabel('Total #', fontsize=25, y=-0.02)
+plt.savefig('./Figs/TotalDistribution.png', bbox_inches='tight')
 
 # %% codecell
 tr_ood_list = open(os.path.join(root, 'SplitLists', 'train_mix_ood.txt'), 'w')
@@ -311,7 +335,7 @@ paths_te_s1, labels_te_s1 = read_lists(os.path.join(root, 'SplitLists', 'val_mix
 paths_tr_s2, labels_tr_s2 = read_lists(os.path.join(root, 'SplitLists', 'train_mix_season_2_lt.txt'))
 paths_te_s2, labels_te_s2 = read_lists(os.path.join(root, 'SplitLists', 'val_mix_season_2_lt.txt'))
 
-# %% codecell
+# %%
 check_list = []
 
 with open(os.path.join(root, 'SplitLists', 'val_mix_season_2_lt.txt'), 'r') as f:
@@ -329,4 +353,86 @@ with open(os.path.join(root, 'SplitLists', 'val_mix_season_2_lt.txt'), 'r') as f
 # %%
 Image.open(os.path.join(root, random.choice(check_list)))
 
+# %% codecell
+group_1_list = []
+
+with open(os.path.join(root, 'SplitLists', 'train_mix_season_1_lt.txt'), 'r') as f:
+        for line in tqdm(f):
+            line = line.replace('\n', '')
+            line_sp = line.split(' ')
+            label = line_sp[1]
+            group_1_list.append(label)
+
+with open(os.path.join(root, 'SplitLists', 'val_mix_season_1_lt.txt'), 'r') as f:
+        for line in tqdm(f):
+            line = line.replace('\n', '')
+            line_sp = line.split(' ')
+            label = line_sp[1]
+            group_1_list.append(label)
+
+group_2_list = []
+
+with open(os.path.join(root, 'SplitLists', 'train_mix_season_2_lt.txt'), 'r') as f:
+        for line in tqdm(f):
+            line = line.replace('\n', '')
+            line_sp = line.split(' ')
+            label = line_sp[1]
+            group_2_list.append(label)
+
+with open(os.path.join(root, 'SplitLists', 'val_mix_season_2_lt.txt'), 'r') as f:
+        for line in tqdm(f):
+            line = line.replace('\n', '')
+            line_sp = line.split(' ')
+            label = line_sp[1]
+            group_2_list.append(label)
+
+# %%
+group_1_counts = sorted([(cat, count) 
+                         for cat, count in zip(*np.unique(group_1_list,
+                                                          return_counts=True))],
+                        key=lambda x:x[1], reverse=True)
+
+group_2_counts = sorted([(cat, count) 
+                         for cat, count in zip(*np.unique(group_2_list,
+                                                          return_counts=True))],
+                        key=lambda x:x[1], reverse=True)
+
+# %%
+group_counts = pd.DataFrame(columns=['Group'] + [e[0] for e in group_2_counts],
+                            data=[['2'] + [e[1] for e in group_2_counts],
+                                  ['1'] + [group_1_counts[i][1] if i < len(group_1_counts) - 1 else 0 
+                                                 for i in range(len(group_2_counts))]])
+
+# %%
+group_counts.set_index('Group').T.plot(kind='barh', stacked=False, figsize=(15, 30))
+
+# group_counts.plot.bar(stacked=True, title="xx")
+
+# %%
+
+# %%
+total_counts = [0 for _ in range(len(group_2_counts))]
+
+for i, e in enumerate(group_1_counts):
+    total_counts[i] += e[1]
+
+for i, e in enumerate(group_2_counts):
+    total_counts[i] += e[1]
+
+
+# %%
+cat = [e[0] for e in group_1_counts]
+cat += [e[0] for e in group_2_counts]
+group_1 = [e[1] for e in group_1_counts]
+group_2 = [e[1] for e in group_2_counts]
+ct = group_1 + group_2
+hue = ['Group 1' if i < len(group_1) else 'Group 2' for i in range(len(ct))]
+
+sns.set(font_scale=2, style='whitegrid')
+plt.subplots(figsize=(15, 30))
+ax = sns.barplot(x=ct, y=cat, hue=hue, dodge=True)
+ax.set_title('Distribution of Group 1 & 2', fontsize=35, y=1.01)
+ax.set_xscale('log')
+ax.set_xlabel('Total #', fontsize=25, y=-0.02)
+plt.savefig('./Figs/GroupDistribution.png', bbox_inches='tight')
 # %%
