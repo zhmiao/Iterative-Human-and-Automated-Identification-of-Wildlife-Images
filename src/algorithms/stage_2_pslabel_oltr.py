@@ -358,21 +358,21 @@ class OLTR(Algorithm):
             return eval_acc_mac, eval_acc_mic
 
     def deploy(self, loader):
-        eval_info, f1, conf_preds, pseudo_hard, pseudo_soft = self.deploy_epoch(loader)
+        eval_info, preds_conf, preds_unconf = self.deploy_epoch(loader)
         self.logger.info(eval_info)
-        conf_preds_path = self.weights_path.replace('.pth', '_conf_preds.npy')
-        self.logger.info('Saving confident predictions to {}'.format(conf_preds_path))
-        conf_preds.tofile(conf_preds_path)
 
-        pseudo_hard_path = self.weights_path.replace('.pth', '_pseudo_hard.npy')
-        self.logger.info('Saving hard pseudo labels to {}'.format(pseudo_hard_path))
-        pseudo_hard.tofile(pseudo_hard_path)
+        preds_conf_txt_path = self.weights_path.replace('.pth', '_preds_conf.txt')
+        preds_unconf_txt_path = self.weights_path.replace('.pth', '_preds_unconf.txt')
 
-        pseudo_soft_path = self.weights_path.replace('.pth', '_pseudo_soft.npy')
-        self.logger.info('Saving soft pseudo targets to {}'.format(pseudo_soft_path))
-        pseudo_soft.tofile(pseudo_soft_path)
+        self.logger.info('Generating confident txt list...\n')
+        with open(preds_conf_txt_path, 'w') as f:
+            for file_id, pred in zip(*preds_conf):
+                f.write('{} {}\n'.format(file_id, pred))
 
-        return f1
+        self.logger.info('Generating unconfident txt list...\n')
+        with open(preds_unconf_txt_path, 'w') as f:
+            for file_id, pred in zip(*preds_unconf):
+                f.write('{} {}\n'.format(file_id, pred))
 
     def train_epoch(self, epoch, soft=False):
 
@@ -526,15 +526,63 @@ class OLTR(Algorithm):
 
     def deploy_epoch(self, loader):
         self.net.eval()
-        # Get unique classes in the loader and corresponding counts
-        loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        total_preds, total_labels, total_logits = self.evaluate_forward(loader, hall=False,
-                                                                        ood=True, out_conf=False)
+        total_file_id = []
+        total_preds = []
+        total_max_probs = []
+
+        with torch.set_grad_enabled(False):
+            for data, file_id in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data = data.cuda()
+                data.requires_grad = False
+
+                # forward
+                _, logits, values_nn = self.memory_forward(data)
+
+                # compute correct
+                max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
+
+                total_preds.append(preds.detach().cpu().numpy())
+                total_max_probs.append(max_probs.detach().cpu().numpy())
+                total_file_id.append(file_id)
+
+        total_file_id = np.concatenate(total_file_id, axis=0)
         total_preds = np.concatenate(total_preds, axis=0)
-        total_labels = np.concatenate(total_labels, axis=0)
-        eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, 
-                                                         eval_class_counts, ood=True)
-        return eval_info, f1, conf_preds,  total_preds, total_logits
+        total_max_probs = np.concatenate(total_max_probs, axis=0)
+
+        eval_info = '{} Picking Non-empty samples... \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+
+        total_file_id_em = total_file_id[total_preds == 0]
+
+        total_file_id_ne = total_file_id[total_preds != 0]
+        total_preds_ne = total_preds[total_preds != 0]
+        total_max_probs_ne = total_max_probs[total_preds != 0]
+
+        eval_info += ('Total empty count is {} out of {} samples ({:3f}%) \n'
+                      .format(len(total_file_id_em), len(total_preds), 100 * (len(total_file_id_em) / len(total_preds))))
+
+        eval_info += '{} Picking confident samples... \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+
+        conf_preds = np.zeros(len(total_preds_ne))
+        conf_preds[total_max_probs_ne > self.args.theta] = 1
+
+        total_file_id_conf = total_file_id_ne[conf_preds == 1]
+        total_preds_conf = total_preds_ne[conf_preds == 1]
+
+        total_file_id_unconf = total_file_id_ne[conf_preds == 0]
+        total_preds_unconf = total_preds_ne[conf_preds == 0]
+
+        eval_info += ('Total confident sample count is {} out of {} non-empty samples ({:3f}%) \n'
+                      .format(len(total_preds_conf), len(total_preds_ne), 100 * (len(total_preds_conf) / len(total_preds_ne))))
+        eval_info += ('Total unconfident sample count is {} out of {} non-empty samples ({:3f}%) \n'
+                      .format(len(total_preds_unconf), len(total_preds_ne), 100 * (len(total_preds_unconf) / len(total_preds_ne))))
+
+        eval_info += ('Total confident sample count is {} out of {} samples ({:3f}%) \n'
+                      .format((len(total_preds_conf) + len(total_file_id_em)), len(total_preds),
+                              100 * ((len(total_preds_conf) + len(total_file_id_em)) / len(total_preds))))
+
+        return eval_info, (total_file_id_conf, total_preds_conf), (total_file_id_unconf, total_preds_unconf)
 
     def memory_forward(self, data):
         # feature
@@ -602,35 +650,6 @@ class OLTR(Algorithm):
                 else:
                     # forward
                     feats, logits, values_nn = self.memory_forward(data)
-
-                    # feats_expand = meta_feats.clone().unsqueeze(1).expand(-1, len(self.meta_centroids), -1)
-                    #
-                    # centroids_expand = self.meta_centroids.clone().unsqueeze(0).expand(len(data), -1, -1)
-                    #
-                    # # computing reachability
-                    # dist_to_centroids = torch.norm(feats_expand - centroids_expand, 2, 2)
-                    # # Sort distances
-                    # values_nn, labels_nn = torch.sort(dist_to_centroids, 1)
-                    #
-                    # min_dists = values_nn[:, 0]
-
-                    # # expand to logits dimension and scale the smallest distance
-                    # reachability = (20 / values_nn[:, 0]).unsqueeze(1).expand(-1,
-                    # # scale logits with reachability
-                    # logits = reachability * logits
-
-                    # _, logits, values_nn = self.memory_forward(data)
-                    # scale logits with reachability
-                    # reachability_logits = (40 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                    # reachability_logits = (18 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-                    # reachability_logits = (13 / values_nn[:, 0]).unsqueeze(1).expand(-1, logits.shape[1])
-
-
-                    # if not soft_reset or not hard_reset:
-                    #     logits /= torch.norm(logits, 2, 1, keepdim=True).clone()
-                    #     reachability_logits = ((self.args.reachability_scale_eval / values_nn[:, 0])
-                    #                            .unsqueeze(1).expand(-1, logits.shape[1]))
-                    #     logits = reachability_logits * logits
 
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 

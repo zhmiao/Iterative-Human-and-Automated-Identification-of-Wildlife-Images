@@ -6,35 +6,46 @@ from shutil import copyfile
 
 # %% codecell
 class_indices_S2_rev = {
-    'Waterbuck': 0,
-    'Baboon': 1,
-    'Warthog': 2,
-    'Bushbuck': 3,
-    'Impala': 4,
-    'Oribi': 5,
-    'Elephant': 6,
-    'Nyala': 7,
+    'Waterbuck': 1,
+    'Baboon': 2,
+    'Warthog': 3,
+    'Bushbuck': 4,
+    'Impala': 5,
+    'Oribi': 6,
+    'Elephant': 7,
     'Genet': 8,
-    'Civet': 9,
-    'Vervet': 10,
+    'Nyala': 9,
+    'Setup': 10,
     'Bushpig': 11,
-    'Reedbuck': 12,
-    'Kudu': 13,
-    'Porcupine': 14,
-    'Buffalo': 15,
-    'Sable_antelope': 16,
-    'Duiker_red': 17,
-    'Wildebeest': 18,
-    'Hartebeest': 19,
-    'Guineafowl_helmeted': 20,
-    'Hare': 21,
-    'Duiker_common': 22,
-    'Mongoose_marsh': 23,
-    'Aardvark': 24,
-    'Honey_badger': 25,
-    'Hornbill_ground': 26,
-    'Mongoose_slender': 27,
-    'Mongoose_bushy_tailed': 28
+    'Porcupine': 12,
+    'Civet': 13,
+    'Vervet': 14,
+    'Reedbuck': 15,
+    'Kudu': 16,
+    'Buffalo': 17,
+    'Sable_antelope': 18,
+    'Duiker_red': 19,
+    'Hartebeest': 20,
+    'Wildebeest': 21,
+    'Guineafowl_helmeted': 22,
+    'Hare': 23,
+    'Duiker_common': 24,
+    'Fire': 25,
+    'Mongoose_marsh': 26,
+    'Aardvark': 27,
+    'Honey_badger': 28,
+    'Hornbill_ground': 29,
+    'Mongoose_slender': 30,
+    'Mongoose_bushy_tailed': 31,
+    'Samango': 32,
+    'Mongoose_white_tailed': 33,
+    'Mongoose_banded': 34,
+    'Mongoose_large_grey': 35,
+    'Bushbaby': 36,
+    'Guineafowl_crested': 37,
+    'Eland': 38,
+    'Lion': 39,
+    'Serval': 40
 }
 
 class_indices_S2 = {class_indices_S2_rev[k]: k for k in class_indices_S2_rev}
@@ -45,7 +56,7 @@ root = '/home/zhmiao/datasets/ecology/GNP'
 
 # confident_path = '/home/zhmiao/repos/AnimalActiveLearing_srv/weights/GTPSMemoryStage2_ConfPseu/051620_MOZ_S2_0_preds_conf.txt'
 # confident_path = '/home/zhmiao/repos/AnimalActiveLearing_srv/weights/GTPSMemoryStage2_ConfPseu_SoftIter/072520_MOZ_S2_soft_iter_0_preds_conf.txt'
-confident_path = '/home/zhmiao/repos/AnimalActiveLearing_srv/weights/GTPSMemoryStage2_ConfPseu_SoftIter_TUNE/072820_MOZ_S2_soft_iter_tune_1_preds_conf.txt'
+confident_path = '/home/zhmiao/repos/AnimalActiveLearning/weights/SemiStage2OLTR_Energy/111620_MOZ_PSLABEL_OLTR_Energy_0_preds_conf.txt'
 
 # %% codecell
 
@@ -77,7 +88,7 @@ file_id_sel = file_id_list[rand_idx]
 cat_sel = cat_list[rand_idx]
 
 # %% codecell
-save_root = os.path.join(root, 'S3_pickout_soft_iter_081120')
+save_root = os.path.join(root, 'S3_pickout_soft_iter_120220')
 os.makedirs(save_root, exist_ok=True)
 
 # %% codecell
@@ -95,3 +106,5 @@ for file_id, cat in tqdm(zip(file_id_sel, cat_sel)):
         save_path = save_path.replace('.jpg', '_{}.jpg'.format(cat))
 
     copyfile(from_path, save_path)
+
+# %%

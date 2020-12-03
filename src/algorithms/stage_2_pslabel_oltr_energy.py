@@ -370,6 +370,21 @@ class OLTR_Energy(OLTR):
                                                                            eb_loss.item())
                 self.logger.info(info_str)
 
+    def evaluate(self, loader, hall=False, ood=False):
+        if ood:
+            # the = 6.77
+            # T = 0.06
+            # self.logger.info('\nCurrent T: {}'.format(T))
+            # self.logger.info('\nCurrent the: {}'.format(the))
+            eval_info, f1, _ = self.ood_evaluate_epoch(loader, self.valloaderunknown, hall=hall)
+            self.logger.info(eval_info)
+            
+            return f1
+        else:
+            eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader, hall=hall)
+            self.logger.info(eval_info)
+            return eval_acc_mac, eval_acc_mic
+
     def evaluate_forward(self, loader, hall=False, ood=False, out_conf=False):
 
         if hall: 
@@ -418,17 +433,75 @@ class OLTR_Energy(OLTR):
         else:
             return total_preds, total_labels, total_logits
 
-    def evaluate(self, loader, hall=False, ood=False):
-        if ood:
-            # the = 6.77
-            # T = 0.06
-            self.logger.info('\nCurrent T: {}'.format(T))
-            self.logger.info('\nCurrent the: {}'.format(the))
-            eval_info, f1, _ = self.ood_evaluate_epoch(loader, self.valloaderunknown, hall=hall)
-            self.logger.info(eval_info)
-            
-            return f1
-        else:
-            eval_info, eval_acc_mac, eval_acc_mic = self.evaluate_epoch(loader, hall=hall)
-            self.logger.info(eval_info)
-            return eval_acc_mac, eval_acc_mic
+    def deploy_epoch(self, loader):
+        self.net.eval()
+        total_file_id = []
+        total_preds = []
+        total_max_probs = []
+        total_energy = []
+        total_probs = []
+
+        with torch.set_grad_enabled(False):
+            for data, file_id in tqdm(loader, total=len(loader)):
+
+                # setup data
+                data = data.cuda()
+                data.requires_grad = False
+
+                # forward
+                _, logits, values_nn = self.memory_forward(data)
+
+                # compute correct
+                probs = F.softmax(logits, dim=1)
+                max_probs, preds = probs.max(dim=1)
+
+                energy_score = -(self.args.energy_T * torch.logsumexp(logits / self.args.energy_T, dim=1))
+
+                total_preds.append(preds.detach().cpu().numpy())
+                total_max_probs.append(max_probs.detach().cpu().numpy())
+                total_file_id.append(file_id)
+                total_energy.append(energy_score.detach().cpu().numpy())
+                total_probs.append(probs.detach().cpu().numpy())
+
+        total_file_id = np.concatenate(total_file_id, axis=0)
+        total_preds = np.concatenate(total_preds, axis=0)
+        total_max_probs = np.concatenate(total_max_probs, axis=0)
+        total_energy = np.concatenate(total_energy, axis=0)
+        total_probs = np.concatenate(total_probs, axis=0)
+
+
+        eval_info = '{} Picking Non-empty samples... \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+
+        total_preds[total_probs[:, 0] > 0.1] = 0
+
+        total_file_id_em = total_file_id[total_preds == 0]
+
+        total_file_id_ne = total_file_id[total_preds != 0]
+        total_preds_ne = total_preds[total_preds != 0]
+        total_max_probs_ne = total_max_probs[total_preds != 0]
+        total_energy_ne = total_energy[total_preds != 0]
+
+        eval_info += ('Total empty count is {} out of {} samples ({:3f}%) \n'
+                      .format(len(total_file_id_em), len(total_preds), 100 * (len(total_file_id_em) / len(total_preds))))
+
+        eval_info += '{} Picking confident samples... \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
+
+        conf_preds = np.zeros(len(total_preds_ne))
+        conf_preds[-total_energy_ne > self.args.energy_the] = 1
+
+        total_file_id_conf = total_file_id_ne[conf_preds == 1]
+        total_preds_conf = total_preds_ne[conf_preds == 1]
+
+        total_file_id_unconf = total_file_id_ne[conf_preds == 0]
+        total_preds_unconf = total_preds_ne[conf_preds == 0]
+
+        eval_info += ('Total confident sample count is {} out of {} non-empty samples ({:3f}%) \n'
+                      .format(len(total_preds_conf), len(total_preds_ne), 100 * (len(total_preds_conf) / len(total_preds_ne))))
+        eval_info += ('Total unconfident sample count is {} out of {} non-empty samples ({:3f}%) \n'
+                      .format(len(total_preds_unconf), len(total_preds_ne), 100 * (len(total_preds_unconf) / len(total_preds_ne))))
+
+        eval_info += ('Total confident sample count is {} out of {} samples ({:3f}%) \n'
+                      .format((len(total_preds_conf) + len(total_file_id_em)), len(total_preds),
+                              100 * ((len(total_preds_conf) + len(total_file_id_em)) / len(total_preds))))
+
+        return eval_info, (total_file_id_conf, total_preds_conf), (total_file_id_unconf, total_preds_unconf)
