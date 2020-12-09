@@ -488,8 +488,8 @@ class OLTR(Algorithm):
         self.net.eval()
         # Get unique classes in the loader and corresponding counts
         loader_uni_class, eval_class_counts = loader.dataset.class_counts_cal()
-        total_preds, total_labels, _ = self.evaluate_forward(loader, hall=hall, 
-                                                             ood=False, out_conf=False)
+        total_preds, total_labels, _, _ = self.evaluate_forward(loader, hall=hall, 
+                                                                ood=False, out_conf=False)
         total_preds = np.concatenate(total_preds, axis=0)
         total_labels = np.concatenate(total_labels, axis=0)
         eval_info, mac_acc, mic_acc = self.evaluate_metric(total_preds, total_labels, 
@@ -503,24 +503,32 @@ class OLTR(Algorithm):
         loader_uni_class_out, eval_class_counts_out = loader_out.dataset.class_counts_cal()
 
         self.logger.info("Forward through in test loader\n")
-        total_preds_in, total_labels_in, _ = self.evaluate_forward(loader_in, hall=hall,
-                                                                   ood=True, out_conf=False)
+        total_preds_in, total_labels_in, _, total_ids_in = self.evaluate_forward(loader_in, hall=hall,
+                                                                                 ood=True, out_conf=False)
         total_preds_in = np.concatenate(total_preds_in, axis=0)
         total_labels_in = np.concatenate(total_labels_in, axis=0)
+        total_ids_in = np.concatenate(total_ids_in, axis=0)
 
         self.logger.info("Forward through out test loader\n")
-        total_preds_out, total_labels_out, _ = self.evaluate_forward(loader_out, hall=hall,
-                                                                     ood=True, out_conf=False)
+        total_preds_out, total_labels_out, _, total_ids_out = self.evaluate_forward(loader_out, hall=hall,
+                                                                                    ood=True, out_conf=False)
         total_preds_out = np.concatenate(total_preds_out, axis=0)
         total_labels_out = np.concatenate(total_labels_out, axis=0)
+        total_ids_out = np.concatenate(total_ids_out, axis=0)
 
         total_preds = np.concatenate((total_preds_out, total_preds_in), axis=0)
         total_labels = np.concatenate((total_labels_out, total_labels_in), axis=0)
+        total_ids = np.concatenate((total_ids_out, total_ids_in), axis=0)
         loader_uni_class = np.concatenate((loader_uni_class_out, loader_uni_class_in), axis=0)
         eval_class_counts = np.concatenate((eval_class_counts_out, eval_class_counts_in), axis=0)
 
         eval_info, f1, conf_preds = self.evaluate_metric(total_preds, total_labels, 
                                                          eval_class_counts, ood=True)
+
+        preds_txt_path = self.weights_path.replace('.pth', '_preds_eval.txt')
+        with open(preds_txt_path, 'w') as f:
+            for file_id, pred, label in zip(total_ids, total_preds, total_labels):
+                f.write('{} {} {}\n'.format(file_id, pred, label))
 
         return eval_info, f1, conf_preds
 
@@ -632,11 +640,12 @@ class OLTR(Algorithm):
         total_labels = []
         total_logits = []
         total_probs = []
+        total_file_ids = []
 
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
 
-            for data, labels in tqdm(loader, total=len(loader)):
+            for data, labels, file_ids in tqdm(loader, total=len(loader)):
 
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
@@ -661,6 +670,7 @@ class OLTR(Algorithm):
                 total_labels.append(labels.detach().cpu().numpy())
                 total_logits.append(logits.detach().cpu().numpy())
                 total_probs.append(max_probs.detach().cpu().numpy())
+                total_file_ids.append(file_ids)
 
         if out_conf:
             total_probs = np.concatenate(total_probs, axis=0)
@@ -668,7 +678,7 @@ class OLTR(Algorithm):
             conf_preds[total_probs >= self.args.theta] = 1
             return total_preds, total_labels, total_logits, conf_preds
         else:
-            return total_preds, total_labels, total_logits
+            return total_preds, total_labels, total_logits, total_file_ids
 
     def evaluate_metric(self, total_preds, total_labels, eval_class_counts, ood=False):
         if ood:

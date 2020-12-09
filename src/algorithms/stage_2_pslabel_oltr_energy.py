@@ -394,11 +394,12 @@ class OLTR_Energy(OLTR):
         total_labels = []
         total_logits = []
         total_probs = []
+        total_file_ids = []
 
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
 
-            for data, labels in tqdm(loader, total=len(loader)):
+            for data, labels, file_ids in tqdm(loader, total=len(loader)):
 
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
@@ -424,6 +425,7 @@ class OLTR_Energy(OLTR):
                 total_labels.append(labels.detach().cpu().numpy())
                 total_logits.append(logits.detach().cpu().numpy())
                 total_probs.append(max_probs.detach().cpu().numpy())
+                total_file_ids.append(file_ids)
 
         if out_conf:
             total_probs = np.concatenate(total_probs, axis=0)
@@ -431,7 +433,7 @@ class OLTR_Energy(OLTR):
             conf_preds[total_probs >= self.args.theta] = 1
             return total_preds, total_labels, total_logits, conf_preds
         else:
-            return total_preds, total_labels, total_logits
+            return total_preds, total_labels, total_logits, total_file_ids
 
     def deploy_epoch(self, loader):
         self.net.eval()

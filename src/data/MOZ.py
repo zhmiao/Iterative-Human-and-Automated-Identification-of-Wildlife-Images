@@ -65,6 +65,25 @@ class MOZ_MIX_OOD(MOZ):
                                           transform=transform)
         ann_dir = os.path.join(self.ann_root, '{}_mix_ood.txt'.format(dset))
         self.load_data(ann_dir)
+        self.id_out = True if dset == 'val' else False
+
+    def __getitem__(self, index):
+        file_id = self.data[index]
+        label = self.labels[index]
+        file_dir = os.path.join(self.img_root, file_id)
+        if not file_dir.endswith('.JPG'):
+            file_dir += '.jpg'
+
+        with open(file_dir, 'rb') as f:
+            sample = Image.open(f).convert('RGB')
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        if self.id_out:
+            return sample, label, file_id
+        else:
+            return sample, label
 
 
 @register_dataset_obj('MOZ_S3_ALL')
@@ -202,6 +221,8 @@ class MOZ_S2_LT_GTPS_LABEL(MOZ):
                 print('** NOT USING GTPS MODES **')
         else:
             print('Confidence prediction is NONE.\n')
+
+        self.id_out = True if dset == 'val' else False
             
     def class_counts_cal_ann(self):
         unique_labels = np.unique(self.labels)
@@ -274,5 +295,8 @@ class MOZ_S2_LT_GTPS_LABEL(MOZ):
             soft_label = self.pseudo_labels_soft[index]
             return sample, label, torch.tensor(soft_label)
         else:
-            return sample, label
+            if self.id_out:
+                return sample, label, file_id
+            else:
+                return sample, label
 
