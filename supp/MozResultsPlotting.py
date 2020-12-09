@@ -122,8 +122,8 @@ hue = (['FineTune Full Ann.' for _ in range(len(ft_full_acc))]
 sns.set(font_scale=2, style='whitegrid')
 plt.subplots(figsize=(15, 30))
 ax = sns.barplot(x=acc, y=cat, hue=hue, dodge=True)
-ax.set_title('Distribution of Group 1 & 2', fontsize=35, y=1.01)
-ax.set_xlabel('Total #', fontsize=25, y=-0.02)
+ax.set_title('Update Performance Comparison', fontsize=35, y=1.01)
+ax.set_xlabel('Acc. (%)', fontsize=25, y=-0.02)
 plt.savefig('./Figs/Group2UpdatePerformance.png', bbox_inches='tight')
 
 # %%
