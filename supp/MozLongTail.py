@@ -144,6 +144,7 @@ len(cat_sel_counts_all)
 # %% codecell
 # len(cat_leftout_counts_all)
 len(cat_leftout_counts_all)
+cat_leftout_counts_all
 
 # %%
 # Distribution Ploting

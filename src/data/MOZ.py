@@ -116,6 +116,36 @@ class MOZ_S3_ALL(Dataset):
             sample = self.transform(sample)
         return sample, file_id
 
+@register_dataset_obj('MOZ_INV')
+class MOZ_INV(Dataset):
+
+    def __init__(self, rootdir, class_indices, dset=None, transform=None):
+        self.img_root = os.path.join(rootdir, 'Mozambique', 'Mozambique_Inv')
+        self.ann_root = os.path.join(rootdir, 'Mozambique', 'SplitLists')
+        self.class_indices = class_indices
+        self.transform = transform
+        self.data = []
+        ann_dir = os.path.join(self.ann_root, 'Mozambique_Inv.txt')
+        self.load_data(ann_dir)
+
+    def load_data(self, ann_dir):
+        with open(ann_dir, 'r') as f:
+            for line in f:
+                line_sp = line.replace('\n', '')
+                self.data.append(line_sp)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        file_id = self.data[index]
+        file_dir = os.path.join(self.img_root, file_id)
+        with open(file_dir, 'rb') as f:
+            sample = Image.open(f).convert('RGB')
+        if self.transform is not None:
+            sample = self.transform(sample)
+        return sample, file_id
+
 
 @register_dataset_obj('MOZ_S2_LT_GTPS')
 class MOZ_S2_LT_GTPS(MOZ):
