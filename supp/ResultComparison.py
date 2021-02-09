@@ -72,8 +72,6 @@ def load_list(path):
             cat_list.append(cat)
     return (np.array(file_id_list), np.array(cat_list))
 
-
-
 # %%
 file_id_conf, cat_conf = load_list(confident_path)
 file_id_unconf, cat_unconf = load_list(unconfident_path)

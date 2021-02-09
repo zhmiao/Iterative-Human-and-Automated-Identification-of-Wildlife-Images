@@ -314,7 +314,7 @@ class OLTR_Energy(OLTR):
             # Forward and loss #
             ####################
 
-            feats, logits, _ = self.memory_forward(data)
+            feats, logits, _, _ = self.memory_forward(data)
 
             preds = logits.argmax(dim=1)
 
@@ -394,12 +394,14 @@ class OLTR_Energy(OLTR):
         total_labels = []
         total_logits = []
         total_probs = []
-        total_file_ids = []
+        total_file_id = []
+        total_feats = []
+        total_energy = []
 
         # Forward and record # correct predictions of each class
         with torch.set_grad_enabled(False):
 
-            for data, labels, file_ids in tqdm(loader, total=len(loader)):
+            for data, labels, file_id in tqdm(loader, total=len(loader)):
 
                 # setup data
                 data, labels = data.cuda(), labels.cuda()
@@ -412,20 +414,34 @@ class OLTR_Energy(OLTR):
                     logits = self.net.fc_hallucinator(feats)
                 else:
                     # forward
-                    feats, logits, values_nn = self.memory_forward(data)
+                    feats, logits, values_nn, meta_feats = self.memory_forward(data)
+                    total_feats.append(meta_feats.detach().cpu().numpy())
 
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 
+                energy_score = -(self.args.energy_T * torch.logsumexp(logits / self.args.energy_T, dim=1))
+
                 if ood:
-                    energy_score = -(self.args.energy_T * torch.logsumexp(logits / self.args.energy_T, dim=1))
                     # Set unconfident prediction to -1
                     preds[-energy_score <= self.args.energy_the] = -1
 
+                total_energy.append(energy_score.detach().cpu().numpy())
                 total_preds.append(preds.detach().cpu().numpy())
                 total_labels.append(labels.detach().cpu().numpy())
                 total_logits.append(logits.detach().cpu().numpy())
                 total_probs.append(max_probs.detach().cpu().numpy())
-                total_file_ids.append(file_ids)
+                total_file_id.append(file_id)
+
+        # total_energy = np.concatenate(total_energy, axis=0)
+        # total_feats = np.concatenate(total_feats, axis=0)
+        # total_preds = np.concatenate(total_preds, axis=0)
+        # total_labels = np.concatenate(total_labels, axis=0)
+        # total_file_id = np.concatenate(total_file_id, axis=0)
+        # feats_path = self.weights_path.replace('.pth', '_feats.npz')
+        # np.savez(feats_path, total_file_id=total_file_id, total_preds=total_preds,
+        #          total_energy=total_energy, total_feats=total_feats,
+        #          total_labels=total_labels)
+        # breakpoint()
 
         if out_conf:
             total_probs = np.concatenate(total_probs, axis=0)
@@ -433,7 +449,7 @@ class OLTR_Energy(OLTR):
             conf_preds[total_probs >= self.args.theta] = 1
             return total_preds, total_labels, total_logits, conf_preds
         else:
-            return total_preds, total_labels, total_logits, total_file_ids
+            return total_preds, total_labels, total_logits, total_file_id
 
     def deploy_epoch(self, loader):
         self.net.eval()
@@ -442,6 +458,7 @@ class OLTR_Energy(OLTR):
         total_max_probs = []
         total_energy = []
         total_probs = []
+        total_feats = []
 
         with torch.set_grad_enabled(False):
             for data, file_id in tqdm(loader, total=len(loader)):
@@ -451,7 +468,7 @@ class OLTR_Energy(OLTR):
                 data.requires_grad = False
 
                 # forward
-                _, logits, values_nn = self.memory_forward(data)
+                _, logits, values_nn, meta_feats = self.memory_forward(data)
 
                 # compute correct
                 probs = F.softmax(logits, dim=1)
@@ -464,20 +481,20 @@ class OLTR_Energy(OLTR):
                 total_file_id.append(file_id)
                 total_energy.append(energy_score.detach().cpu().numpy())
                 total_probs.append(probs.detach().cpu().numpy())
+                total_feats.append(meta_feats.detach().cpu().numpy())
 
         total_file_id = np.concatenate(total_file_id, axis=0)
         total_preds = np.concatenate(total_preds, axis=0)
         total_max_probs = np.concatenate(total_max_probs, axis=0)
         total_energy = np.concatenate(total_energy, axis=0)
         total_probs = np.concatenate(total_probs, axis=0)
-
+        total_feats = np.concatenate(total_feats, axis=0)
 
         eval_info = '{} Picking Non-empty samples... \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
         total_preds[total_probs[:, 0] > 0.1] = 0
 
         total_file_id_em = total_file_id[total_preds == 0]
-
         total_file_id_ne = total_file_id[total_preds != 0]
         total_preds_ne = total_preds[total_preds != 0]
         total_max_probs_ne = total_max_probs[total_preds != 0]
@@ -505,5 +522,8 @@ class OLTR_Energy(OLTR):
         eval_info += ('Total confident sample count is {} out of {} samples ({:3f}%) \n'
                       .format((len(total_preds_conf) + len(total_file_id_em)), len(total_preds),
                               100 * ((len(total_preds_conf) + len(total_file_id_em)) / len(total_preds))))
+
+        # feats_path = self.weights_path.replace('.pth', '_feats.npz')
+        # np.savez(feats_path, total_file_id=total_file_id, total_preds=total_preds, total_energy=total_energy, total_feats=total_feats)
 
         return eval_info, (total_file_id_conf, total_preds_conf), (total_file_id_unconf, total_preds_unconf)

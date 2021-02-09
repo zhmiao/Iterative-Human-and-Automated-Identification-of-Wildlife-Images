@@ -438,7 +438,7 @@ class OLTR(Algorithm):
             # Forward and loss #
             ####################
 
-            feats, logits, _ = self.memory_forward(data)
+            feats, logits, _, _ = self.memory_forward(data)
 
             preds = logits.argmax(dim=1)
 
@@ -537,6 +537,7 @@ class OLTR(Algorithm):
         total_file_id = []
         total_preds = []
         total_max_probs = []
+        total_feats = []
 
         with torch.set_grad_enabled(False):
             for data, file_id in tqdm(loader, total=len(loader)):
@@ -546,7 +547,7 @@ class OLTR(Algorithm):
                 data.requires_grad = False
 
                 # forward
-                _, logits, values_nn = self.memory_forward(data)
+                _, logits, values_nn, meta_feats = self.memory_forward(data)
 
                 # compute correct
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
@@ -554,10 +555,12 @@ class OLTR(Algorithm):
                 total_preds.append(preds.detach().cpu().numpy())
                 total_max_probs.append(max_probs.detach().cpu().numpy())
                 total_file_id.append(file_id)
+                total_feats.append(meta_feats.detach().cpu().numpy())
 
         total_file_id = np.concatenate(total_file_id, axis=0)
         total_preds = np.concatenate(total_preds, axis=0)
         total_max_probs = np.concatenate(total_max_probs, axis=0)
+        total_feats = np.concatenate(total_feats, axis=0)
 
         eval_info = '{} Picking Non-empty samples... \n'.format(datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
 
@@ -629,7 +632,7 @@ class OLTR(Algorithm):
         # final logits
         logits = self.net.cosnorm_classifier(meta_feats)
 
-        return feats, logits, values_nn
+        return feats, logits, values_nn, meta_feats
 
     def evaluate_forward(self, loader, hall=False, ood=False, out_conf=False):
 
@@ -658,7 +661,7 @@ class OLTR(Algorithm):
                     logits = self.net.fc_hallucinator(feats)
                 else:
                     # forward
-                    feats, logits, values_nn = self.memory_forward(data)
+                    feats, logits, values_nn, meta_feats = self.memory_forward(data)
 
                 max_probs, preds = F.softmax(logits, dim=1).max(dim=1)
 
