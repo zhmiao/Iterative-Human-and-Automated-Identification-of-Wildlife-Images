@@ -86,6 +86,7 @@ class DEMO(OLTR):
 
         self.net.eval()
         total_file_id = []
+        total_labels = []
         total_preds = []
         total_max_probs = []
         total_energy = []
@@ -93,11 +94,13 @@ class DEMO(OLTR):
         total_feats = []
 
         with torch.set_grad_enabled(False):
-            for data, file_id in tqdm(loader, total=len(loader)):
+            for data, file_id, labels in tqdm(loader, total=len(loader)):
 
                 # setup data
                 data = data.cuda()
+                labels = labels.cuda()
                 data.requires_grad = False
+                labels.requires_grad = False
 
                 # forward
                 _, logits, values_nn, meta_feats = self.memory_forward(data)
@@ -109,6 +112,7 @@ class DEMO(OLTR):
                 energy_score = -(self.args.energy_T * torch.logsumexp(logits / self.args.energy_T, dim=1))
 
                 total_preds.append(preds.detach().cpu().numpy())
+                total_labels.append(labels.detach().cpu().numpy())
                 total_max_probs.append(max_probs.detach().cpu().numpy())
                 total_file_id.append(file_id)
                 total_energy.append(energy_score.detach().cpu().numpy())
@@ -117,6 +121,7 @@ class DEMO(OLTR):
 
         total_file_id = np.concatenate(total_file_id, axis=0)
         total_preds = np.concatenate(total_preds, axis=0)
+        total_labels = np.concatenate(total_labels, axis=0)
         total_max_probs = np.concatenate(total_max_probs, axis=0)
         total_energy = np.concatenate(total_energy, axis=0)
         total_probs = np.concatenate(total_probs, axis=0)
@@ -129,13 +134,16 @@ class DEMO(OLTR):
 
         total_file_id_conf = total_file_id[conf_preds == 1]
         total_preds_conf = total_preds[conf_preds == 1]
+        total_labels_conf = total_labels[conf_preds == 1]
 
         total_file_id_unconf = total_file_id[conf_preds == 0]
         total_preds_unconf = total_preds[conf_preds == 0]
 
-        eval_info += ('Total confident sample count is {} out of {} samples ({:3f}%) \n'
+        eval_info += ('Total confident sample count is {} out of {} samples ({:.3f}%) \n'
                       .format(len(total_preds_conf), len(total_preds), 100 * (len(total_preds_conf) / len(total_preds))))
-        eval_info += ('Total unconfident sample count is {} out of {} samples ({:3f}%) \n'
+        eval_info += ('Total unconfident sample count is {} out of {} samples ({:.3f}%) \n'
                       .format(len(total_preds_unconf), len(total_preds), 100 * (len(total_preds_unconf) / len(total_preds))))
+        eval_info += ('Confident prediction accuracy is : {:.3f}% \n'
+                      .format(100 * (total_preds_conf == total_labels_conf).sum() / len(total_preds_conf)))
 
         return eval_info, (total_file_id_conf, total_preds_conf), (total_file_id_unconf, total_preds_unconf)

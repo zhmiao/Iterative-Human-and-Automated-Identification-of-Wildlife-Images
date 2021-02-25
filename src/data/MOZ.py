@@ -340,23 +340,27 @@ class DEMO(Dataset):
         self.class_indices = class_indices
         self.transform = transform
         self.data = []
+        self.labels = []
         ann_dir = os.path.join(self.ann_root, 'demo_data.txt')
         self.load_data(ann_dir)
 
     def load_data(self, ann_dir):
         with open(ann_dir, 'r') as f:
             for line in f:
-                line_sp = line.replace('\n', '')
-                self.data.append(line_sp)
+                line_sp = line.replace('\n', '').split(' ')
+                label = self.class_indices[line_sp[1]]
+                self.data.append(line_sp[0])
+                self.labels.append(label)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
         file_id = self.data[index]
+        label = self.labels[index]
         file_dir = os.path.join(self.img_root, file_id)
         with open(file_dir, 'rb') as f:
             sample = Image.open(f).convert('RGB')
         if self.transform is not None:
             sample = self.transform(sample)
-        return sample, file_id
+        return sample, file_id, label
