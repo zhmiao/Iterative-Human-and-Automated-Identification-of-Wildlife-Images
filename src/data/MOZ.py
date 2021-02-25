@@ -330,3 +330,33 @@ class MOZ_S2_LT_GTPS_LABEL(MOZ):
             else:
                 return sample, label
 
+
+@register_dataset_obj('DEMO')
+class DEMO(Dataset):
+
+    def __init__(self, rootdir, class_indices, dset=None, transform=None):
+        self.img_root = os.path.join(rootdir, 'data')
+        self.ann_root = os.path.join(rootdir)
+        self.class_indices = class_indices
+        self.transform = transform
+        self.data = []
+        ann_dir = os.path.join(self.ann_root, 'demo_data.txt')
+        self.load_data(ann_dir)
+
+    def load_data(self, ann_dir):
+        with open(ann_dir, 'r') as f:
+            for line in f:
+                line_sp = line.replace('\n', '')
+                self.data.append(line_sp)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        file_id = self.data[index]
+        file_dir = os.path.join(self.img_root, file_id)
+        with open(file_dir, 'rb') as f:
+            sample = Image.open(f).convert('RGB')
+        if self.transform is not None:
+            sample = self.transform(sample)
+        return sample, file_id

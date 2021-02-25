@@ -6,3 +6,4 @@ from . import stage_2_finetune_gt
 from . import stage_2_pslabel
 from . import stage_2_pslabel_oltr
 from . import stage_2_pslabel_oltr_energy
+from . import demo

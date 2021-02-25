@@ -23,6 +23,8 @@ parser.add_argument('--ood', default=False, action='store_true',
                     help='If evaluate the model ood.')
 parser.add_argument('--deploy', default=False, action='store_true',
                     help='Actual model deployment.')
+parser.add_argument('--demo', default=False, action='store_true',
+                    help='Inference demo.')
 parser.add_argument('--energy_ft', default=False, action='store_true',
                     help='Mode for fine-tuning ood.')
 args = parser.parse_args()
@@ -76,6 +78,10 @@ elif args.energy_ft:
     alg.set_train()
     alg.logger.info('\nEnergy Fine-tuning...')
     alg.energy_ft()
+elif args.demo:
+    alg.set_eval()
+    alg.logger.info('\nInference Demo...')
+    alg.demo_inference(loader=alg.deployloader)
 else:
     alg.set_train()
     alg.logger.info('\nTraining...')

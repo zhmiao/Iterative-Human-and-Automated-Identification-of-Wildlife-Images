@@ -1,0 +1,59 @@
+# training
+conf_id: 111620_MOZ_PSLABEL_OLTR_Energy
+algorithm: DEMO 
+num_epochs: 10
+no_up_freq: 3
+log_interval: 10
+limit_steps: 1
+## lr_scheduler
+step_size: 10
+gamma: 0.1
+
+# data
+dataset_root: ./demo_data 
+deploy_dataset_name: DEMO
+class_indices: MOZ_S2_LT
+batch_size: 32
+num_workers: 8
+num_samples_cls: 2
+
+# model
+model_name: SoftOLTRResNetClassifier
+num_layers: 50
+inference_weights: ./weights/SemiStage2OLTR_Energy/111620_MOZ_PSLABEL_OLTR_Energy_0_ft.pth
+
+
+# optim
+## feature
+lr_feature: 0.0000001
+momentum_feature: 0.9
+weight_decay_feature: 0.0005
+## classifier
+# lr_classifier: 0.01 # Session 0
+lr_classifier: 0.000001
+momentum_classifier: 0.9
+weight_decay_classifier: 0.0005
+## memory
+lr_memory: 0.0000001
+momentum_memory: 0.9
+weight_decay_memory: 0.0005
+
+
+# center loss weight
+ctr_loss_weight: 0.01
+
+# reachability
+reachability_scale: 10.0 # Sess 0, 1
+reachability_scale_eval: 50.0
+
+# Soft labels
+# Session 1, blur rotation
+T: 10  # Temperature
+alpha: 0.5  # Soft-hard ratio
+
+# confidence
+# theta: 0.75 # sess 1
+theta: 0.8 # sess 2
+# energy_the: 14.4
+energy_the: 6.77
+energy_T: 0.06
