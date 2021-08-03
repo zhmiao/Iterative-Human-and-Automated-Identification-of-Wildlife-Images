@@ -4,6 +4,8 @@
 
 [[Preprint]](https://arxiv.org/abs/2105.02320)
 
+<img src='./assets/intro.png' width=600>
+
 ## Data
 All raw camera trap images that were used in this study, along with the associated
 annotation information, will be uploaded to the publicly-available Labeled Information
