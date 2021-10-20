@@ -2,7 +2,7 @@
 
 ## *Nature - Machine Intelligence, 2021*
 
-[[Preprint]](https://arxiv.org/abs/2105.02320)
+[[Paper]](https://www.nature.com/natmachintell/volumes/3/issues/10) [[Preprint]](https://arxiv.org/abs/2105.02320)
 
 <img src='./assets/intro.png' width=600>
 
