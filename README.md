@@ -1,4 +1,4 @@
-# Code Implementation for Iterative Human and Automated Identification of Wildlife Images
+# Code Implementation for "Iterative Human and Automated Identification of Wildlife Images"
 
 ### *This paper is published in Nature - Machine Intelligence, 2021*
 
