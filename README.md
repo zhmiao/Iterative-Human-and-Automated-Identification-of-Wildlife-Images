@@ -1,10 +1,18 @@
-# Code Implementation for "Iterative Human and Automated Identification of Wildlife Images"
-
-### *This paper is published in Nature - Machine Intelligence, 2021*
+# Iterative Human and Automated Identification of Wildlife Images
 
 [[Paper]](https://www.nature.com/articles/s42256-021-00393-0) [[Preprint]](https://arxiv.org/abs/2105.02320)
 
+### *This repository is the author's re-implementation of the iterative recognition system with machine and humans in the loop described in:
+"Iterative Human and Automated Identification of Wildlife Images"
+Zhongqi Miao*,  Ziwei Liu*,  Kaitlyn M. Gaynor, Meredith S. Palmer, Stella X. Yu, Wayne M, Getz in Nature - Machine Intelligence, 2021*
+
 <img src='./assets/intro.png' width=600>
+
+Further information please contact [Zhongqi Miao](mailto:zhongqi.miao@berkeley.edu) and [Ziwei Liu](https://liuziwei7.github.io/).
+
+## Requirements
+* [PyTorch](https://pytorch.org/) (version >= 0.4.1)
+* [scikit-learn](https://scikit-learn.org/stable/)
 
 ## Data
 All raw camera trap images that were used in this study (except classes with humans), along with the associated
