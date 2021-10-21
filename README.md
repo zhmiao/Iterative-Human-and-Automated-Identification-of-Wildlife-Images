@@ -1,8 +1,8 @@
-# Iterative Human and Automated Identification of Wildlife Images
+# Code Implementation for Iterative Human and Automated Identification of Wildlife Images
 
-## *Nature - Machine Intelligence, 2021*
+### *This paper is published in Nature - Machine Intelligence, 2021*
 
-[[Paper]](https://www.nature.com/natmachintell/volumes/3/issues/10) [[Preprint]](https://arxiv.org/abs/2105.02320)
+[[Paper]](https://www.nature.com/articles/s42256-021-00393-0) [[Preprint]](https://arxiv.org/abs/2105.02320)
 
 <img src='./assets/intro.png' width=600>
 
