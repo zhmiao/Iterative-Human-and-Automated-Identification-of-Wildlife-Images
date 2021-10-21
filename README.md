@@ -47,7 +47,8 @@ python main.py --config ./configs/Stage_2/pslabel_oltr_energy_resnet_MOZ_S2_1116
 ## Demo
 A demo of this code can be found in [[here]](https://codeocean.com/capsule/2011717/tree/v1) in CodeOcean.
 
-## Citation
+## License and Citation
+The use of this software is released under [BSD-3](https://github.com/zhmiao/AnimalActiveLearning/blob/master/LICENSE).
 ```
 @article{10.1038/s42256-021-00393-0, 
 year = {2021}, 
