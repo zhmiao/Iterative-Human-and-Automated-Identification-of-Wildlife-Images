@@ -7,10 +7,9 @@
 <img src='./assets/intro.png' width=600>
 
 ## Data
-All raw camera trap images that were used in this study, along with the associated
-annotation information, will be uploaded to the publicly-available Labeled Information
-Library of Alexandria: Biology and Conservation (LILA BC) upon publication. Currently, please 
-contact the [authors](zhongqi.miao@berkeley.edu) for the full data.
+All raw camera trap images that were used in this study (except classes with humans), along with the associated
+annotation information, are uploaded to the publicly-available Labeled Information
+Library of Alexandria: Biology and Conservation (LILA BC), and can be downloaded [[here]](https://lilablobssc.blob.core.windows.net/gorongosacameratraps/gorongosa-camera-traps-public-256x256.zip). 
 
 ## Changing dataset root for training and testing
 Once the data is downloaded, please change the data root in the configuration files. For 
@@ -37,12 +36,19 @@ python main.py --config ./configs/Stage_2/pslabel_oltr_energy_resnet_MOZ_S2_1116
 python main.py --config ./configs/Stage_2/pslabel_oltr_energy_resnet_MOZ_S2_111620.yaml --deploy
 ```
 
+## Demo
+A demo of this code can be found in [[here]](https://codeocean.com/capsule/2011717/tree/v1) in CodeOcean.
+
 ## Citation
 ```
-@article{AnimalActiveLearning,
-  title={Iterative Human and Automated Identification of Wildlife Images},
-  author={Miao, Zhongqi and Liu, Ziwei and Gaynor, Kaitlyn M. and Palmer, Meredith S. and Yu, Stella X. and Getz, Wayne M.},
-  journal={Nature - Machine Intelligence},
-  year={2021}
+@article{10.1038/s42256-021-00393-0, 
+year = {2021}, 
+title = {{Iterative human and automated identification of wildlife images}}, 
+author = {Miao, Zhongqi and Liu, Ziwei and Gaynor, Kaitlyn M and Palmer, Meredith S and Yu, Stella X and Getz, Wayne M}, 
+journal = {Nature Machine Intelligence}, 
+doi = {10.1038/s42256-021-00393-0}, 
+pages = {885--895}, 
+number = {10}, 
+volume = {3}
 }
 ```
