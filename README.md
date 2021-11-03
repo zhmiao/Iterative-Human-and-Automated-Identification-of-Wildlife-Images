@@ -1,6 +1,6 @@
 # Iterative Human and Automated Identification of Wildlife Images
 
-[[Paper]](https://www.nature.com/articles/s42256-021-00393-0) [[Preprint]](https://arxiv.org/abs/2105.02320)
+[[Paper]](https://www.nature.com/articles/s42256-021-00393-0) [[Preprint]](https://arxiv.org/abs/2105.02320) [[Press]](https://techxplore.com/news/2021-11-framework-automatically-wildlife-collaboration-humans.html)
 
 ### *This repository is the author's re-implementation of the iterative recognition system with machine and humans in the loop described in:
 "Iterative Human and Automated Identification of Wildlife Images"
